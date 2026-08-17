@@ -26,6 +26,10 @@
 #include "DataStore.h"
 #include "NodePrefs.h"
 
+#ifdef HAS_PCF8574_ACTUATOR
+#include <helpers/actuators/PCF8574Actuator.h>
+#endif
+
 #include <RTClib.h>
 #include <helpers/ArduinoHelpers.h>
 #include <helpers/BaseSerialInterface.h>
@@ -256,6 +260,11 @@ private:
 
   #define ADVERT_PATH_TABLE_SIZE   16
   AdvertPath advert_paths[ADVERT_PATH_TABLE_SIZE]; // circular table
+
+#ifdef HAS_PCF8574_ACTUATOR
+  PCF8574Actuator actuator;
+  void checkActuatorCommand(const char* text);
+#endif
 };
 
 extern MyMesh the_mesh;

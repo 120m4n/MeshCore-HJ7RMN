@@ -3,6 +3,15 @@
 #include <Arduino.h> // needed for PlatformIO
 #include <Mesh.h>
 
+#ifdef HAS_PCF8574_ACTUATOR
+#ifndef ACTUATOR_CMD_ON
+#define ACTUATOR_CMD_ON "ACTUATOR_ON"
+#endif
+#ifndef ACTUATOR_CMD_OFF
+#define ACTUATOR_CMD_OFF "ACTUATOR_OFF"
+#endif
+#endif
+
 #define CMD_APP_START                 1
 #define CMD_SEND_TXT_MSG              2
 #define CMD_SEND_CHANNEL_TXT_MSG      3
@@ -542,8 +551,31 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
   queueMessage(from, TXT_TYPE_SIGNED_PLAIN, pkt, sender_timestamp, sender_prefix, 4, text);
 }
 
+#ifdef HAS_PCF8574_ACTUATOR
+void MyMesh::checkActuatorCommand(const char* text) {
+  bool state;
+  if (strcmp(text, ACTUATOR_CMD_ON) == 0) {
+    state = true;
+  } else if (strcmp(text, ACTUATOR_CMD_OFF) == 0) {
+    state = false;
+  } else {
+    return;   // not an actuator command
+  }
+
+  actuator.setPin(PCF8574_ACTUATOR_PIN, state);
+
+#ifdef PIN_LED
+  digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);   // local confirmation blink
+#endif
+}
+#endif
+
 void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp,
                                   const char *text) {
+#ifdef HAS_PCF8574_ACTUATOR
+  checkActuatorCommand(text);
+#endif
+
   int i = 0;
   if (app_target_ver >= 3) {
     out_frame[i++] = RESP_CODE_CHANNEL_MSG_RECV_V3;
@@ -900,6 +932,10 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
 
 void MyMesh::begin(bool has_display) {
   BaseChatMesh::begin();
+
+#ifdef HAS_PCF8574_ACTUATOR
+  actuator.begin(Wire);
+#endif
 
   if (!_store->loadMainIdentity(self_id)) {
     self_id = radio_new_identity(); // create new random identity
