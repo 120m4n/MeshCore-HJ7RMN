@@ -263,7 +263,7 @@ private:
 
 #ifdef HAS_PCF8574_ACTUATOR
   PCF8574Actuator actuator;
-  void checkActuatorCommand(const char* text);
+  void checkActuatorCommand(const mesh::GroupChannel& channel, const char* text);
 #endif
 };
 

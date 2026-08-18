@@ -562,7 +562,16 @@ static bool textEndsWithCmd(const char* text, const char* cmd) {
   return strcmp(text + (text_len - cmd_len), cmd) == 0;
 }
 
-void MyMesh::checkActuatorCommand(const char* text) {
+// only channels whose secret is the sha256("<name>")[:16] hashtag-channel
+// key are authorized to trigger the actuator - excludes both the shared
+// "Public" channel and any private (randomly-keyed) channel.
+static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel) {
+  uint8_t expected[16];
+  mesh::Utils::sha256(expected, sizeof(expected), (const uint8_t*)name, strlen(name));
+  return memcmp(expected, channel.secret, sizeof(expected)) == 0;
+}
+
+void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char* text) {
   bool state;
   if (textEndsWithCmd(text, ACTUATOR_CMD_ON)) {
     state = true;
@@ -570,6 +579,13 @@ void MyMesh::checkActuatorCommand(const char* text) {
     state = false;
   } else {
     return;   // not an actuator command
+  }
+
+  int idx = findChannelIdx(channel);
+  ChannelDetails details;
+  if (idx < 0 || !getChannel(idx, details) || !isHashtagChannel(details.name, channel)) {
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched but channel is not an authorized hashtag channel, ignoring");
+    return;
   }
 
   MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)PCF8574_ACTUATOR_PIN, (uint32_t)state);
@@ -585,7 +601,7 @@ void MyMesh::checkActuatorCommand(const char* text) {
 void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp,
                                   const char *text) {
 #ifdef HAS_PCF8574_ACTUATOR
-  checkActuatorCommand(text);
+  checkActuatorCommand(channel, text);
 #endif
 
   int i = 0;
