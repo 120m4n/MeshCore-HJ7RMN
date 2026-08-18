@@ -21,37 +21,63 @@ gobernar, por ejemplo, un relé que a su vez controla un actuador externo.
 
 ## Cómo funciona
 
-1. Cualquier persona que conozca la PSK del canal envía un mensaje de texto
-   al canal (desde la app companion de MeshCore, ej. `ACTUATOR_ON`).
+1. Cualquier persona que conozca la clave del canal envía un mensaje de
+   texto al canal (desde la app companion de MeshCore, ej. `ACTUATOR_ON`).
+   El texto real que viaja por la malla siempre lleva el prefijo
+   `"<nombre_del_nodo_emisor>: "` (lo agrega `sendGroupMessage()`), por eso
+   el firmware compara la palabra clave como **sufijo** del mensaje, no
+   como igualdad exacta.
 2. El nodo companion descifra el mensaje del canal (esto ya ocurre siempre,
-   sea o no un comando de actuador) y compara el texto, con `strcmp`, contra
+   sea o no un comando de actuador) y compara el sufijo del texto contra
    las dos palabras clave configuradas.
-3. Si coincide, el firmware escribe por I2C sobre el PCF8574 para poner en
-   alto o en bajo el pin configurado como salida del actuador.
-4. Como única confirmación, el LED integrado de la placa parpadea
-   brevemente. El comando **no** genera respuesta por la malla (no hay tráfico
-   de radio adicional).
+3. Si coincide, el firmware valida que el canal por el que llegó sea un
+   **canal hashtag autorizado** (ver más abajo) antes de actuar.
+4. Si también pasa esa validación, escribe por I2C sobre el PCF8574 para
+   poner en alto o en bajo el pin configurado como salida del actuador.
+5. Como única confirmación, el LED integrado de la placa parpadea
+   brevemente. El comando **no** genera respuesta por la malla (no hay
+   tráfico de radio adicional).
 
-No hay autenticación adicional más allá de conocer la PSK del canal: quien
-pueda descifrar el mensaje, puede accionar el actuador. Si necesitas
-restringir el acceso, usa un canal dedicado (no el público) con una PSK que
-solo compartas con quien deba controlar el actuador (ver más abajo).
+### Restricción de seguridad: solo canales hashtag
+
+El actuador **solo** se dispara si el mensaje llegó por un canal cuyo
+secreto sea verificablemente `sha256(nombre_del_canal)[:16]` — la
+convención de "canal hashtag" documentada en `docs/companion_protocol.md`
+(típicamente canales cuyo nombre empieza con `#`, cuya clave se deriva del
+propio nombre). Esto excluye automáticamente:
+
+- El canal **`Public`**: su clave (`PUBLIC_GROUP_PSK`) es un valor fijo
+  no derivado de la palabra `"Public"`, así que nunca pasa esta
+  validación, sin importar qué mensaje llegue.
+- Cualquier **canal privado** (clave aleatoria, no derivada del nombre) —
+  aunque conozcas su PSK y lo hayas unido correctamente, el actuador lo
+  ignora.
+
+La implementación está en `isHashtagChannel()` /
+`MyMesh::checkActuatorCommand()`, en `examples/companion_radio/MyMesh.cpp`.
+Si el canal no pasa la validación, se descarta en silencio (visible solo
+con `MESH_DEBUG`, ver `DEBUG_I2C.md`).
 
 ## a) Configurar el canal
 
 Por defecto, MeshCore precarga un canal llamado `"Public"` con una PSK fija
 compartida por toda la red MeshCore (`PUBLIC_GROUP_PSK`, definida en
-`examples/companion_radio/MyMesh.cpp`). El actuador reacciona a comandos
-recibidos en **cualquier** canal de grupo al que el nodo esté suscrito, no
-solo el público — el filtro es el texto del mensaje, no el canal.
+`examples/companion_radio/MyMesh.cpp`) — pero, por la restricción de
+seguridad de arriba, el actuador **nunca** reacciona a comandos en ese
+canal.
 
-Para usar un canal propio en vez del público:
+Para que el actuador funcione, necesitas un canal hashtag propio:
 
 1. Desde la app companion (o cualquier cliente que hable el protocolo, ver
-   `docs/companion_protocol.md`), crea/edita un canal con el comando
-   `CMD_SET_CHANNEL`, indicando un nombre y una PSK propios.
-2. Comparte esa PSK únicamente con quien deba poder accionar el actuador.
-3. Envía la palabra clave de comando a ese canal en vez de al público.
+   `docs/companion_protocol.md`), crea/únete a un canal cuyo nombre
+   empiece con `#` (p. ej. `#mi-actuador-xyz`) — usa algo poco obvio si no
+   quieres que cualquiera que adivine el nombre pueda controlarlo, ya que
+   la clave se deriva determinísticamente de ese nombre (`sha256(nombre)`,
+   ver `docs/companion_protocol.md:439-441`).
+2. Repite el mismo nombre exacto (mayúsculas/minúsculas incluidas) en
+   cualquier otro nodo desde el que quieras enviar el comando — no hace
+   falta compartir ningún secreto a mano, la app lo deriva igual en ambos.
+3. Envía la palabra clave de comando a ese canal.
 
 No es necesario tocar el firmware para cambiar de canal: es una operación
 en tiempo de ejecución vía el protocolo companion.
