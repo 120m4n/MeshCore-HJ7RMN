@@ -34,7 +34,15 @@ y deja los artefactos en `out/`:
 ```
 out/<TARGET>-<version>.uf2
 out/<TARGET>-<version>.bin
+out/<TARGET>-<version>.zip
 ```
+
+El `.zip` es un paquete estándar de Secure DFU de Nordic (contiene
+`firmware.bin` + `firmware.dat` + `manifest.json`), generado
+automáticamente por el toolchain de Adafruit/nrfutil como parte del build
+normal — no hace falta armarlo a mano. Es el archivo que se sube a
+[meshcore.io/flasher](https://meshcore.io/flasher) (ver
+[Opción B](#opción-b-meshcoreioflasher-zip-dfu) más abajo).
 
 Alternativa equivalente, sin pasar por `build.sh` (los artefactos quedan en
 `.pio/build/<TARGET>/` en vez de `out/`):
@@ -52,10 +60,15 @@ sh build.sh build-firmware <TARGET>
 
 ## 2. Flashear
 
-El XIAO nRF52840 usa un bootloader UF2 (arrastrar y soltar), no requiere
-herramientas adicionales de flasheo, sea cual sea el target (el bootloader
-solo entiende UF2 por USB; el firmware BLE también se flashea por USB, el
-BLE solo se usa después, en tiempo de ejecución):
+Hay dos formas de llevar el firmware compilado a la placa. Cualquiera de
+las dos deja el mismo firmware corriendo; usa la que te resulte más cómoda.
+
+### Opción A: UF2 manual (arrastrar y soltar)
+
+El XIAO nRF52840 usa un bootloader UF2, no requiere herramientas
+adicionales de flasheo, sea cual sea el target (el bootloader solo
+entiende UF2 por USB; el firmware BLE también se flashea por USB, el BLE
+solo se usa después, en tiempo de ejecución):
 
 1. Conecta la XIAO por USB.
 2. Entra en modo bootloader haciendo **doble clic rápido** sobre el botón
@@ -76,8 +89,24 @@ BLE solo se usa después, en tiempo de ejecución):
 No existe un comando CLI de "un solo paso" para flashear (`pio run -t
 upload`) para estos targets porque el `upload_protocol` configurado es
 `nrfutil`, pensado para flasheo por DFU/BLE, no para el bootloader UF2 de
-fábrica de la XIAO; el flujo soportado y recomendado por MeshCore para este
-board es el UF2 manual descrito arriba.
+fábrica de la XIAO.
+
+### Opción B: meshcore.io/flasher (.zip DFU)
+
+1. Conecta la XIAO por USB (mismo cable, no hace falta entrar manualmente
+   en modo bootloader UF2; el flasher web maneja el protocolo Secure DFU
+   directamente).
+2. Abre [meshcore.io/flasher](https://meshcore.io/flasher).
+3. Cuando pida un firmware personalizado / custom firmware, sube el
+   archivo `out/<TARGET>-<version>.zip` generado en el paso 1.
+4. Sigue las instrucciones en pantalla del flasher para completar la
+   subida.
+
+No pude verificar desde este entorno los detalles exactos de la interfaz
+de meshcore.io/flasher (WebUSB/WebBluetooth, pasos en pantalla, etc.) — lo
+único confirmado y probado localmente es que el `.zip` que produce el
+build (`firmware.bin` + `firmware.dat` + `manifest.json`, paquete Secure
+DFU estándar de Nordic) es el formato que ese flasher pide.
 
 ## 3. Verificar
 
