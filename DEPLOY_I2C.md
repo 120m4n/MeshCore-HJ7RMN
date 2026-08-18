@@ -1,48 +1,61 @@
-# Deploy: firmware companion USB con actuador I2C (XIAO nRF52840 + Wio-SX1262)
+# Deploy: firmware companion con actuador I2C (XIAO nRF52840 + Wio-SX1262)
 
-Instrucciones para compilar y flashear la variante `Xiao_nrf52_companion_radio_usb`
+Instrucciones para compilar y flashear el firmware companion (USB o BLE)
 con el soporte de actuador I2C descrito en `README_I2C.md`.
+
+Hay dos targets, según cómo quieras hablar con la app companion. La
+funcionalidad del actuador es idéntica en ambos:
+
+| Target                              | Transporte companion |
+|--------------------------------------|-----------------------|
+| `Xiao_nrf52_companion_radio_usb`      | USB (serie)           |
+| `Xiao_nrf52_companion_radio_ble`      | Bluetooth LE          |
+
+Sustituye `<TARGET>` por el que corresponda en los comandos de abajo.
 
 ## Requisitos
 
 - [PlatformIO Core](https://docs.platformio.org) instalado (`pio --version`).
 - Un XIAO nRF52840 con módulo Wio-SX1262 conectado.
-- Cable USB-C.
+- Cable USB-C (necesario para flashear en ambos casos; BLE solo se usa
+  después de flashear, para hablar con la app).
 
 ## 1. Compilar
 
 Desde la raíz del repositorio:
 
 ```bash
-sh build.sh build-firmware Xiao_nrf52_companion_radio_usb
+sh build.sh build-firmware <TARGET>
 ```
 
-Esto ejecuta `pio run -e Xiao_nrf52_companion_radio_usb`, convierte el
-`.hex` resultante a `.uf2` y deja los artefactos en `out/`:
+Esto ejecuta `pio run -e <TARGET>`, convierte el `.hex` resultante a `.uf2`
+y deja los artefactos en `out/`:
 
 ```
-out/Xiao_nrf52_companion_radio_usb-<version>.uf2
-out/Xiao_nrf52_companion_radio_usb-<version>.bin
+out/<TARGET>-<version>.uf2
+out/<TARGET>-<version>.bin
 ```
 
 Alternativa equivalente, sin pasar por `build.sh` (los artefactos quedan en
-`.pio/build/Xiao_nrf52_companion_radio_usb/` en vez de `out/`):
+`.pio/build/<TARGET>/` en vez de `out/`):
 
 ```bash
-pio run -e Xiao_nrf52_companion_radio_usb
+pio run -e <TARGET>
 ```
 
 Para compilar sin flags de depuración (build de producción):
 
 ```bash
 export DISABLE_DEBUG=1
-sh build.sh build-firmware Xiao_nrf52_companion_radio_usb
+sh build.sh build-firmware <TARGET>
 ```
 
 ## 2. Flashear
 
 El XIAO nRF52840 usa un bootloader UF2 (arrastrar y soltar), no requiere
-herramientas adicionales de flasheo:
+herramientas adicionales de flasheo, sea cual sea el target (el bootloader
+solo entiende UF2 por USB; el firmware BLE también se flashea por USB, el
+BLE solo se usa después, en tiempo de ejecución):
 
 1. Conecta la XIAO por USB.
 2. Entra en modo bootloader haciendo **doble clic rápido** sobre el botón
@@ -52,7 +65,7 @@ herramientas adicionales de flasheo:
 3. Copia el archivo `.uf2` generado al volumen que apareció:
 
    ```bash
-   cp out/Xiao_nrf52_companion_radio_usb-*.uf2 /Volumes/XIAO-SENSE/
+   cp out/<TARGET>-*.uf2 /Volumes/XIAO-SENSE/
    ```
 
    (ajusta la ruta de montaje según tu sistema operativo; en Linux suele
@@ -61,15 +74,22 @@ herramientas adicionales de flasheo:
    USB desaparece automáticamente al terminar de flashear.
 
 No existe un comando CLI de "un solo paso" para flashear (`pio run -t
-upload`) para este target porque el `upload_protocol` configurado es
+upload`) para estos targets porque el `upload_protocol` configurado es
 `nrfutil`, pensado para flasheo por DFU/BLE, no para el bootloader UF2 de
 fábrica de la XIAO; el flujo soportado y recomendado por MeshCore para este
 board es el UF2 manual descrito arriba.
 
 ## 3. Verificar
 
-Con un cliente companion (app MeshCore, `meshcore.js`, `meshcore_py`, etc.)
-conectado por USB al puerto serie que expone la placa:
+Conecta un cliente companion (app MeshCore, `meshcore.js`, `meshcore_py`,
+etc.) al nodo:
+
+- Si flasheaste `Xiao_nrf52_companion_radio_usb`: por el puerto serie USB.
+- Si flasheaste `Xiao_nrf52_companion_radio_ble`: por Bluetooth LE,
+  emparejando con el PIN configurado (`BLE_PIN_CODE`, por defecto
+  `123456` en `variants/xiao_nrf52/platformio.ini`).
+
+Luego, en cualquiera de los dos casos:
 
 1. Envía `ACTUATOR_ON` al canal configurado (por defecto, `Public`).
 2. Debes ver el LED de la XIAO parpadear brevemente y el pin

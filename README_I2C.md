@@ -1,6 +1,6 @@
 # Actuador I2C sobre comando en canal público (XIAO nRF52840 + Wio-SX1262)
 
-Esta variante del firmware companion USB de MeshCore añade una funcionalidad
+Esta variante del firmware companion de MeshCore añade una funcionalidad
 adicional: cuando el nodo recibe, en un canal de grupo (por defecto el canal
 público "Public"), un mensaje de texto que coincide exactamente con una
 palabra clave configurable, activa o desactiva un pin de un expansor I2C
@@ -8,8 +8,13 @@ palabra clave configurable, activa o desactiva un pin de un expansor I2C
 gobernar, por ejemplo, un relé que a su vez controla un actuador externo.
 
 - **Target de hardware**: Seeed XIAO nRF52840 + módulo LoRa Wio-SX1262
-  (entorno PlatformIO `variants/xiao_nrf52`, firmware
-  `Xiao_nrf52_companion_radio_usb`).
+  (entorno PlatformIO `variants/xiao_nrf52`).
+- **Firmwares soportados**: `Xiao_nrf52_companion_radio_usb` (companion por
+  USB) y `Xiao_nrf52_companion_radio_ble` (companion por Bluetooth LE). La
+  funcionalidad es idéntica en ambos: el actuador reacciona al mensaje de
+  canal recibido por la malla LoRa, no al transporte companion (USB o BLE)
+  usado para hablar con la app — ese transporte solo sirve para
+  configurar el nodo y leer/enviar mensajes, no interviene en este flujo.
 - **Punto de enganche en el código**: `MyMesh::onChannelMessageRecv()` en
   `examples/companion_radio/MyMesh.cpp`.
 - **Driver del actuador**: `src/helpers/actuators/PCF8574Actuator.h/.cpp`.
