@@ -562,6 +562,8 @@ void MyMesh::checkActuatorCommand(const char* text) {
     return;   // not an actuator command
   }
 
+  MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)PCF8574_ACTUATOR_PIN, (uint32_t)state);
+
   actuator.setPin(PCF8574_ACTUATOR_PIN, state);
 
 #ifdef PIN_LED
