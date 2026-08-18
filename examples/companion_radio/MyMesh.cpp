@@ -552,11 +552,21 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
 }
 
 #ifdef HAS_PCF8574_ACTUATOR
+// group text messages are always sent as "<sender_name>: <text>" (see
+// BaseChatMesh::sendGroupMessage), so match the command as a suffix
+// instead of an exact match against the whole message.
+static bool textEndsWithCmd(const char* text, const char* cmd) {
+  size_t text_len = strlen(text);
+  size_t cmd_len = strlen(cmd);
+  if (cmd_len > text_len) return false;
+  return strcmp(text + (text_len - cmd_len), cmd) == 0;
+}
+
 void MyMesh::checkActuatorCommand(const char* text) {
   bool state;
-  if (strcmp(text, ACTUATOR_CMD_ON) == 0) {
+  if (textEndsWithCmd(text, ACTUATOR_CMD_ON)) {
     state = true;
-  } else if (strcmp(text, ACTUATOR_CMD_OFF) == 0) {
+  } else if (textEndsWithCmd(text, ACTUATOR_CMD_OFF)) {
     state = false;
   } else {
     return;   // not an actuator command
