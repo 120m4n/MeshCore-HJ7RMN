@@ -37,11 +37,83 @@ ejemplo, un relé que a su vez controla un actuador externo.
    poner en alto o en bajo el pin indicado en el comando (0-7). Cualquiera
    de los 8 pines es controlable de forma independiente con el mismo canal
    — no hay restricción de autorización por pin, solo a nivel de canal.
-5. El comando **no** genera respuesta por la malla (no hay tráfico de
-   radio adicional) ni confirmación visual en builds de producción — el
-   parpadeo del LED integrado como confirmación local solo está activo en
-   builds compilados con `MESH_DEBUG` (ver `DEBUG_I2C.md`), para no gastar
-   batería en un nodo dentro de un gabinete alimentado por panel solar.
+5. Por defecto el comando **no** genera respuesta por la malla (no hay
+   tráfico de radio adicional) ni confirmación visual en builds de
+   producción — el parpadeo del LED integrado como confirmación local solo
+   está activo en builds compilados con `MESH_DEBUG` (ver `DEBUG_I2C.md`),
+   para no gastar batería en un nodo dentro de un gabinete alimentado por
+   panel solar. Opcionalmente, con el flag `ACTUATOR_SEND_ACK` (ver más
+   abajo), el nodo responde al mismo canal confirmando el cambio.
+
+## Consultar y confirmar el estado por radio
+
+Además de encender/apagar pines, el firmware soporta dos mecanismos para
+verificar el estado de las salidas de forma remota, sin acceso físico al
+nodo:
+
+- **Consulta de estado (`PIN_STATUS`)**: siempre disponible (no requiere
+  ningún flag) en cualquier canal hashtag autorizado. Envía la palabra de
+  comando `PIN_STATUS` al canal (mismo mecanismo de sufijo que
+  `PIN<n>_ON/OFF`) y el nodo responde al canal con el estado de los 8
+  pines. A diferencia del ack de escritura, esta consulta **lee el chip
+  PCF8574 por I2C en el momento** (no confía ciegamente en el estado que el
+  firmware tiene en memoria) — importante si el PCF8574 tiene su propia
+  alimentación (ver "Conexión física" más abajo) y esa alimentación sufrió
+  algún corte sin contingencia, ya que el chip pudo volver a su estado de
+  power-on sin que el firmware se enterara:
+
+  ```
+  STATE=b00101100
+  ```
+
+  Si la lectura revela que el chip real no coincidía con lo que el
+  firmware tenía en memoria, la respuesta lo indica explícitamente:
+
+  ```
+  STATE=b11111111 (resynced)
+  ```
+
+  (el firmware **no** reescribe el chip para forzar el último estado
+  comandado — reporta la realidad leída y actualiza su propio registro
+  interno para coincidir con ella; la decisión de volver a activar una
+  salida tras un corte de energía es de quien opera el sistema, no
+  automática). Si la lectura I2C falla (no un mismatch, sino un error de
+  bus), la respuesta usa el último valor conocido, marcado como no
+  verificado:
+
+  ```
+  STATE=b00101100 (cached)
+  ```
+
+- **Ack de escritura** (opt-in, build flag `ACTUATOR_SEND_ACK`): si está
+  activo, cada `PIN<n>_ON`/`PIN<n>_OFF` que se ejecute con éxito genera
+  además una respuesta al canal:
+
+  ```
+  PIN3=ON STATE=b00101100
+  ```
+
+  Este ack **no** se envía si la escritura I2C falla (el estado real es
+  incierto en ese caso) ni si `ACTUATOR_SEND_ACK` no está definido — por
+  defecto sigue apagado, ya que añade tráfico LoRa en cada comando y en un
+  nodo a batería/panel solar ese costo debe ser una decisión explícita, no
+  automática.
+
+### Formato de `STATE=b........`
+
+Los 8 caracteres tras `b` representan el estado de los 8 pines del
+PCF8574, pero **en un orden que no es el binario estándar**: la posición
+del carácter (de izquierda a derecha, empezando en 0) es directamente el
+número de pin — no el orden MSB-first habitual de un byte.
+
+```
+STATE=b00101100
+       01234567   <- número de pin en esa posición
+```
+
+En el ejemplo, los pines `2`, `4` y `5` están en `1` (activos); el resto en
+`0`. Si decodificas esto como un binario estándar (bit 7 primero) vas a
+leer los pines equivocados — la posición **es** el número de pin.
 
 ### Restricción de seguridad: solo canales hashtag
 
@@ -100,13 +172,24 @@ defecto si no se especifican:
 -D ACTUATOR_CMD_PREFIX='"PIN"'
 -D ACTUATOR_CMD_ON_SUFFIX='"_ON"'
 -D ACTUATOR_CMD_OFF_SUFFIX='"_OFF"'
+-D ACTUATOR_CMD_STATUS='"PIN_STATUS"'
+-D ACTUATOR_SEND_ACK=1
 ```
 
-Por defecto (si no defines estos flags) son `"PIN"`, `"_ON"` y `"_OFF"`,
-lo que da comandos `PIN0_ON`..`PIN7_ON` / `PIN0_OFF`..`PIN7_OFF`. La
-comparación es **exacta y sensible a mayúsculas**, no se procesan
+Por defecto (si no defines los tres primeros flags) son `"PIN"`, `"_ON"` y
+`"_OFF"`, lo que da comandos `PIN0_ON`..`PIN7_ON` / `PIN0_OFF`..`PIN7_OFF`.
+La comparación es **exacta y sensible a mayúsculas**, no se procesan
 parámetros adicionales, y un dígito fuera de `0`-`7` (ej. `PIN9_ON`) no
-coincide con ningún comando.
+coincide con ningún comando. `ACTUATOR_CMD_STATUS` (default `"PIN_STATUS"`)
+es la palabra de comando para la consulta de estado — ver
+["Consultar y confirmar el estado por radio"](#consultar-y-confirmar-el-estado-por-radio)
+más arriba.
+
+`ACTUATOR_SEND_ACK` es distinto a los demás: es un flag de **presencia**
+(no un string), y por defecto está **apagado** — sin él definido, el
+comportamiento es el mismo de siempre, sin tráfico de radio extra. Actívalo
+solo si necesitas confirmación remota de que el comando se ejecutó y
+aceptas el costo de batería que implica.
 
 Para cambiarlas, descomenta y edita esas líneas en
 `variants/xiao_nrf52/platformio.ini` dentro del env

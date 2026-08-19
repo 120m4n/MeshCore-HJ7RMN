@@ -21,8 +21,15 @@
  * command (n = 0-7), so watch Dx = D2 + n for a given pin n.
  *
  * Protocol emulated: a single-byte I2C write sets all 8 quasi-
- * bidirectional pins at once, same as a real PCF8574 - no internal
- * registers, no read-back logic needed for this test rig.
+ * bidirectional pins at once, same as a real PCF8574. A read returns
+ * that same byte (see onI2CRequest below), so the companion firmware's
+ * readState() can be tested against this rig too.
+ *
+ * Simulating a power loss on the chip: type 'r' + Enter in the serial
+ * monitor to force last_state back to 0xFF (power-on default) without
+ * going through onI2CReceive - this mimics the PCF8574 losing power on
+ * its own supply rail while the XIAO companion keeps running with a
+ * now-stale cached state, so you can test readState()'s drift detection.
  */
 
 #include <Wire.h>
@@ -66,6 +73,10 @@ void onI2CReceive(int num_bytes) {
   }
 }
 
+void onI2CRequest() {
+  Wire.write(last_state);
+}
+
 void setup() {
   Serial.begin(115200);
   for (uint8_t i = 0; i < NUM_PINS; i++) {
@@ -75,10 +86,19 @@ void setup() {
 
   Wire.begin(I2C_SLAVE_ADDR);
   Wire.onReceive(onI2CReceive);
+  Wire.onRequest(onI2CRequest);
 
   Serial.println("i2c_actuator_nano ready, listening as PCF8574 stand-in at 0x20");
+  Serial.println("Type 'r' + Enter to simulate the chip losing power (resets to 0xFF)");
 }
 
 void loop() {
-  // all the work happens in onI2CReceive(); nothing to poll
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'r' || c == 'R') {
+      last_state = 0xFF;
+      applyState(last_state);
+      Serial.println("Simulated reset: chip lost power, all pins HIGH (0xFF)");
+    }
+  }
 }
