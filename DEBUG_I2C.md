@@ -156,8 +156,11 @@ XIAO.
   del canal.
 - **Paso 6**: el comando efectivamente disparó una escritura I2C con el
   valor esperado.
-- El parpadeo del LED integrado (ya presente en el firmware) es la
-  confirmación visual más simple e inmediata, sin necesidad de consola.
+- El parpadeo del LED integrado es la confirmación visual más simple e
+  inmediata, sin necesidad de consola — pero solo está activo en este
+  build de debug (`MESH_DEBUG`). En producción no parpadea, para no
+  gastar batería en un nodo alimentado por panel solar dentro de un
+  gabinete.
 
 ## Volver al estado normal
 

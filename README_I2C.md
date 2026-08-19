@@ -37,9 +37,11 @@ ejemplo, un relé que a su vez controla un actuador externo.
    poner en alto o en bajo el pin indicado en el comando (0-7). Cualquiera
    de los 8 pines es controlable de forma independiente con el mismo canal
    — no hay restricción de autorización por pin, solo a nivel de canal.
-5. Como única confirmación, el LED integrado de la placa parpadea
-   brevemente. El comando **no** genera respuesta por la malla (no hay
-   tráfico de radio adicional).
+5. El comando **no** genera respuesta por la malla (no hay tráfico de
+   radio adicional) ni confirmación visual en builds de producción — el
+   parpadeo del LED integrado como confirmación local solo está activo en
+   builds compilados con `MESH_DEBUG` (ver `DEBUG_I2C.md`), para no gastar
+   batería en un nodo dentro de un gabinete alimentado por panel solar.
 
 ### Restricción de seguridad: solo canales hashtag
 
