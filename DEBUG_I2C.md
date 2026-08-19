@@ -126,6 +126,20 @@ Si el texto recibido no coincide con ningún comando (o el dígito está
 fuera de `0`-`7`), no se imprime nada — solo verás el tráfico genérico de
 radio/mesh de la recepción del mensaje.
 
+Para probar también la consulta de estado, envía `PIN_STATUS` al mismo
+canal — no requiere ningún flag adicional, responde en cualquier build. En
+la app companion deberías ver llegar un mensaje `STATE=b........` de
+vuelta al canal (ver `README_I2C.md` para el formato). Si además
+compilaste con `-D ACTUATOR_SEND_ACK=1`, cada `PIN0_ON`/`PIN0_OFF` también
+genera un mensaje `PIN0=ON STATE=b........` / `PIN0=OFF STATE=b........`.
+
+`PIN_STATUS` lee el PCF8574 real por I2C en el momento, no el caché en
+memoria del firmware — para probar la detección de drift, escribe `r` +
+Enter en el monitor serie del Nano (ver `tools/i2c_actuator_nano/README.md`)
+para simular que el chip perdió su estado por un corte de energía, y luego
+envía `PIN_STATUS`: la respuesta debería llegar como
+`STATE=b11111111 (resynced)` en vez del estado que tenía antes del `r`.
+
 ## Paso 6 — Confirmar la escritura I2C con el Nano de prueba
 
 En paralelo, abre el monitor serie del Nano (Arduino IDE Serial Monitor, o

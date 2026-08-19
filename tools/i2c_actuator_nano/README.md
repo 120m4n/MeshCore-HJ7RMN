@@ -55,6 +55,26 @@ comando que solo debería tocar un pin):
 pio device monitor
 ```
 
+## Simular pérdida de estado del chip
+
+El Nano responde a lecturas I2C (no solo escrituras) devolviendo su
+`last_state`, así que también sirve para probar `PCF8574Actuator::readState()`
+del firmware companion — la lectura real que usa el comando `PIN_STATUS`
+para detectar cuando el caché del companion ya no coincide con el chip real
+(ver `README_I2C.md`).
+
+Para simular ese escenario (ej. el PCF8574 pierde alimentación en su propio
+riel, sin contingencia, mientras la XIAO sigue corriendo con el caché
+desactualizado), escribe `r` + Enter en el monitor serie del Nano:
+
+```
+Simulated reset: chip lost power, all pins HIGH (0xFF)
+```
+
+Esto fuerza `last_state` a `0xFF` (estado de power-on del PCF8574) **sin**
+pasar por la escritura I2C normal — el companion no se entera hasta que
+consulta `PIN_STATUS` y lo detecta como drift.
+
 ## Ver también
 
 - `README_I2C.md` (raíz del repo) — la funcionalidad de actuador que este

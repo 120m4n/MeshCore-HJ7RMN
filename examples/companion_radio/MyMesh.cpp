@@ -13,6 +13,9 @@
 #ifndef ACTUATOR_CMD_OFF_SUFFIX
 #define ACTUATOR_CMD_OFF_SUFFIX "_OFF"
 #endif
+#ifndef ACTUATOR_CMD_STATUS
+#define ACTUATOR_CMD_STATUS "PIN_STATUS"
+#endif
 #endif
 
 #define CMD_APP_START                 1
@@ -585,6 +588,15 @@ static bool parseActuatorCmd(const char* text, uint8_t* pin, bool* state) {
   return false;
 }
 
+// matches a literal command word as a suffix of the message (no digit),
+// used for PIN_STATUS - same suffix-matching rationale as parseActuatorCmd.
+static bool textEndsWithCmd(const char* text, const char* cmd) {
+  size_t text_len = strlen(text);
+  size_t cmd_len = strlen(cmd);
+  if (cmd_len > text_len) return false;
+  return strcmp(text + (text_len - cmd_len), cmd) == 0;
+}
+
 // only channels whose secret is the sha256("<name>")[:16] hashtag-channel
 // key are authorized to trigger the actuator - excludes both the shared
 // "Public" channel and any private (randomly-keyed) channel.
@@ -594,10 +606,21 @@ static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel
   return memcmp(expected, channel.secret, sizeof(expected)) == 0;
 }
 
+// renders `state` as 8 chars where position i (left to right) is pin i's
+// state ('1' = on) - NOT a standard MSB-first binary rendering of the byte.
+static void buildStateBits(uint8_t state, char out[9]) {
+  for (uint8_t i = 0; i <= PCF8574_MAX_PIN; i++) {
+    out[i] = (state & (1 << i)) ? '1' : '0';
+  }
+  out[PCF8574_MAX_PIN + 1] = 0;
+}
+
 void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char* text) {
   uint8_t pin;
   bool state;
-  if (!parseActuatorCmd(text, &pin, &state)) {
+  bool is_write = parseActuatorCmd(text, &pin, &state);
+  bool is_status = !is_write && textEndsWithCmd(text, ACTUATOR_CMD_STATUS);
+  if (!is_write && !is_status) {
     return;   // not an actuator command
   }
 
@@ -608,14 +631,46 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
     return;
   }
 
-  MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)pin, (uint32_t)state);
+  char bits[9];
+  bool did_act;
 
-  actuator.setPin(pin, state);
+  if (is_write) {
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)pin, (uint32_t)state);
+    did_act = actuator.setPin(pin, state);
+#ifdef ACTUATOR_SEND_ACK
+    if (did_act) {
+      buildStateBits(actuator.getState(), bits);
+      char msg[32];
+      snprintf(msg, sizeof(msg), "PIN%u=%s STATE=b%s", (unsigned)pin, state ? "ON" : "OFF", bits);
+      sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+    }
+#endif
+  } else {   // is_status
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: status query matched");
+    did_act = true;
+
+    uint8_t chip_state;
+    bool drifted = false;
+    bool verified = actuator.readState(&chip_state, &drifted);
+    buildStateBits(chip_state, bits);
+
+    char msg[40];
+    if (!verified) {
+      snprintf(msg, sizeof(msg), "STATE=b%s (cached)", bits);
+    } else if (drifted) {
+      snprintf(msg, sizeof(msg), "STATE=b%s (resynced)", bits);
+    } else {
+      snprintf(msg, sizeof(msg), "STATE=b%s", bits);
+    }
+    sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+  }
 
 #if defined(PIN_LED) && defined(MESH_DEBUG)
   // debug builds only - a battery/solar node in an enclosure shouldn't
   // burn power blinking a confirmation LED nobody is watching.
-  digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);
+  if (did_act) {
+    digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);
+  }
 #endif
 }
 #endif

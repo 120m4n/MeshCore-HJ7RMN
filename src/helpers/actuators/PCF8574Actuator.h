@@ -22,6 +22,13 @@ class PCF8574Actuator {
 public:
   void begin(TwoWire& wire, uint8_t i2c_addr = PCF8574_I2C_ADDR);
   bool setPin(uint8_t pin, bool state);   // returns false on I2C error
+  uint8_t getState() const { return _out_state; }   // last-written byte, no I2C traffic
+
+  // live I2C read of the chip's actual pin state. On success, resyncs the
+  // cache to match (the chip is ground truth - e.g. it may have lost power
+  // on its own supply rail independently of the host). Returns false only
+  // on I2C error, in which case *out is the last-known cached value.
+  bool readState(uint8_t* out, bool* drifted = NULL);
 
 private:
   TwoWire* _wire = NULL;

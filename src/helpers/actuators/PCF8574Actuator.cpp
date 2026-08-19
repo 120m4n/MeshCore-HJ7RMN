@@ -25,6 +25,25 @@ bool PCF8574Actuator::setPin(uint8_t pin, bool state) {
   return writeState();
 }
 
+bool PCF8574Actuator::readState(uint8_t* out, bool* drifted) {
+  if (drifted != NULL) *drifted = false;
+
+  if (_wire == NULL || _wire->requestFrom((uint8_t)_addr, (uint8_t)1) != 1) {
+    MESH_DEBUG_PRINTLN("PCF8574Actuator: I2C read failed");
+    *out = _out_state;
+    return false;
+  }
+
+  uint8_t actual = _wire->read();
+  if (actual != _out_state) {
+    MESH_DEBUG_PRINTLN("PCF8574Actuator: state drift detected, chip=0x%02X cached=0x%02X, resyncing", (uint32_t)actual, (uint32_t)_out_state);
+    if (drifted != NULL) *drifted = true;
+  }
+  _out_state = actual;   // chip is ground truth
+  *out = actual;
+  return true;
+}
+
 bool PCF8574Actuator::writeState() {
   _wire->beginTransmission(_addr);
   _wire->write(_out_state);
