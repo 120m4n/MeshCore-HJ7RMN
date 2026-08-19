@@ -9,10 +9,6 @@
 #define PCF8574_I2C_ADDR 0x20
 #endif
 
-#ifndef PCF8574_ACTUATOR_PIN
-#define PCF8574_ACTUATOR_PIN 0
-#endif
-
 /*
  * Minimal driver for a PCF8574 I2C GPIO expander used to drive an
  * external actuator (relay, etc.) from a companion radio command.

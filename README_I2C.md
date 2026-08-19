@@ -1,11 +1,12 @@
 # Actuador I2C sobre comando en canal público (XIAO nRF52840 + Wio-SX1262)
 
 Esta variante del firmware companion de MeshCore añade una funcionalidad
-adicional: cuando el nodo recibe, en un canal de grupo (por defecto el canal
-público "Public"), un mensaje de texto que coincide exactamente con una
-palabra clave configurable, activa o desactiva un pin de un expansor I2C
-**PCF8574** conectado por los pines SDA/SCL de la placa. Ese pin puede
-gobernar, por ejemplo, un relé que a su vez controla un actuador externo.
+adicional: cuando el nodo recibe, en un canal de grupo, un mensaje de texto
+que coincide con un patrón de comando configurable (`PIN<n>_ON` /
+`PIN<n>_OFF`), activa o desactiva el pin `<n>` (0-7) de un expansor I2C
+**PCF8574** conectado por los pines SDA/SCL de la placa. Cada uno de los 8
+pines es direccionable de forma independiente, y puede gobernar, por
+ejemplo, un relé que a su vez controla un actuador externo.
 
 - **Target de hardware**: Seeed XIAO nRF52840 + módulo LoRa Wio-SX1262
   (entorno PlatformIO `variants/xiao_nrf52`).
@@ -22,18 +23,20 @@ gobernar, por ejemplo, un relé que a su vez controla un actuador externo.
 ## Cómo funciona
 
 1. Cualquier persona que conozca la clave del canal envía un mensaje de
-   texto al canal (desde la app companion de MeshCore, ej. `ACTUATOR_ON`).
-   El texto real que viaja por la malla siempre lleva el prefijo
-   `"<nombre_del_nodo_emisor>: "` (lo agrega `sendGroupMessage()`), por eso
-   el firmware compara la palabra clave como **sufijo** del mensaje, no
+   texto al canal (desde la app companion de MeshCore, ej. `PIN3_ON` para
+   activar el pin 3). El texto real que viaja por la malla siempre lleva
+   el prefijo `"<nombre_del_nodo_emisor>: "` (lo agrega `sendGroupMessage()`),
+   por eso el firmware compara el comando como **sufijo** del mensaje, no
    como igualdad exacta.
 2. El nodo companion descifra el mensaje del canal (esto ya ocurre siempre,
-   sea o no un comando de actuador) y compara el sufijo del texto contra
-   las dos palabras clave configuradas.
+   sea o no un comando de actuador) y compara el sufijo del texto contra el
+   patrón `<prefijo><dígito 0-7><sufijo _ON o _OFF>` configurado.
 3. Si coincide, el firmware valida que el canal por el que llegó sea un
    **canal hashtag autorizado** (ver más abajo) antes de actuar.
 4. Si también pasa esa validación, escribe por I2C sobre el PCF8574 para
-   poner en alto o en bajo el pin configurado como salida del actuador.
+   poner en alto o en bajo el pin indicado en el comando (0-7). Cualquiera
+   de los 8 pines es controlable de forma independiente con el mismo canal
+   — no hay restricción de autorización por pin, solo a nivel de canal.
 5. Como única confirmación, el LED integrado de la placa parpadea
    brevemente. El comando **no** genera respuesta por la malla (no hay
    tráfico de radio adicional).
@@ -82,32 +85,37 @@ Para que el actuador funcione, necesitas un canal hashtag propio:
 No es necesario tocar el firmware para cambiar de canal: es una operación
 en tiempo de ejecución vía el protocolo companion.
 
-## b) Configurar la palabra clave
+## b) Configurar el patrón de comando
 
-Las palabras clave que activan/desactivan el actuador son build flags de
-PlatformIO, con valores por defecto si no se especifican:
+El comando tiene la forma `<prefijo><pin>_ON` / `<prefijo><pin>_OFF`, donde
+`<pin>` es un único dígito `0`-`7` que identifica el pin del PCF8574 a
+controlar (ej. `PIN3_ON` activa el pin 3, `PIN3_OFF` lo desactiva). El
+prefijo y los dos sufijos son build flags de PlatformIO, con valores por
+defecto si no se especifican:
 
 ```ini
 ; variants/xiao_nrf52/platformio.ini, env Xiao_nrf52_companion_radio_usb
--D ACTUATOR_CMD_ON='"ACTUATOR_ON"'
--D ACTUATOR_CMD_OFF='"ACTUATOR_OFF"'
+-D ACTUATOR_CMD_PREFIX='"PIN"'
+-D ACTUATOR_CMD_ON_SUFFIX='"_ON"'
+-D ACTUATOR_CMD_OFF_SUFFIX='"_OFF"'
 ```
 
-Por defecto (si no defines estos flags) son `"ACTUATOR_ON"` y
-`"ACTUATOR_OFF"`. La comparación es **exacta y sensible a mayúsculas**
-(`strcmp`), no se procesan prefijos ni parámetros.
+Por defecto (si no defines estos flags) son `"PIN"`, `"_ON"` y `"_OFF"`,
+lo que da comandos `PIN0_ON`..`PIN7_ON` / `PIN0_OFF`..`PIN7_OFF`. La
+comparación es **exacta y sensible a mayúsculas**, no se procesan
+parámetros adicionales, y un dígito fuera de `0`-`7` (ej. `PIN9_ON`) no
+coincide con ningún comando.
 
-Para cambiarlas, descomenta y edita esas dos líneas en
+Para cambiarlas, descomenta y edita esas líneas en
 `variants/xiao_nrf52/platformio.ini` dentro del env
 `Xiao_nrf52_companion_radio_usb`, y recompila (ver `DEPLOY_I2C.md`).
 
 ## c) Configurar la dirección I2C del actuador
 
-También son build flags del mismo env:
+También es un build flag del mismo env:
 
 ```ini
 -D PCF8574_I2C_ADDR=0x20      ; dirección I2C del PCF8574 (0x20-0x27 según A0-A2)
--D PCF8574_ACTUATOR_PIN=0     ; pin del PCF8574 (0-7) que gobierna el actuador
 ```
 
 La dirección `0x20` corresponde a un PCF8574 con los pines de dirección
@@ -133,15 +141,16 @@ Conecta el PCF8574 así:
   fuente, si el actuador consume más corriente de la que la XIAO puede dar)
 - Pull-ups en SDA/SCL (4.7kΩ típico) si tu módulo PCF8574 no las trae
   integradas
-- El pin de salida configurado (`PCF8574_ACTUATOR_PIN`) del PCF8574 al
-  actuador externo (relé, driver, etc.)
+- Cualquiera de los 8 pines de salida del PCF8574 (0-7, según el comando
+  recibido) al actuador externo correspondiente (relé, driver, etc.)
 
 ## Comportamiento del pin
 
-El comando es tipo **toggle**: `ACTUATOR_ON` deja el pin activo de forma
-indefinida hasta recibir `ACTUATOR_OFF`; no hay apagado automático por
-tiempo. Si necesitas un pulso momentáneo en vez de un toggle persistente,
-modifica `MyMesh::checkActuatorCommand()` en
+El comando es tipo **toggle**: `PIN<n>_ON` deja el pin `<n>` activo de
+forma indefinida hasta recibir `PIN<n>_OFF`; no hay apagado automático por
+tiempo. Cada pin se controla de forma independiente — activar uno no
+afecta el estado de los demás. Si necesitas un pulso momentáneo en vez de
+un toggle persistente, modifica `MyMesh::checkActuatorCommand()` en
 `examples/companion_radio/MyMesh.cpp`.
 
 ## Ver también

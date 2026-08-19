@@ -120,12 +120,12 @@ etc.) al nodo:
 
 Luego, en cualquiera de los dos casos:
 
-1. Envía `ACTUATOR_ON` al canal configurado (por defecto, `Public`).
-2. Debes ver el LED de la XIAO parpadear brevemente y el pin
-   `PCF8574_ACTUATOR_PIN` del PCF8574 cambiar de estado (medible con un
-   multímetro o LED de prueba, o usando el sketch de
-   `tools/i2c_actuator_nano/` como actuador de prueba).
-3. Envía `ACTUATOR_OFF` para revertir el estado.
+1. Envía `PIN0_ON` a un canal hashtag propio (el actuador nunca reacciona
+   en el canal `Public`; ver `README_I2C.md`).
+2. Debes ver el LED de la XIAO parpadear brevemente y el pin 0 del PCF8574
+   cambiar de estado (medible con un multímetro o LED de prueba, o usando
+   el sketch de `tools/i2c_actuator_nano/` como actuador de prueba).
+3. Envía `PIN0_OFF` para revertir el estado.
 
-Ver `README_I2C.md` para el detalle de configuración (canal, palabra clave,
-dirección I2C).
+Ver `README_I2C.md` para el detalle de configuración (canal, patrón de
+comando, dirección I2C).

@@ -25,10 +25,11 @@ Pines I2C hardware del Arduino Nano:
 Agrega pull-ups de 4.7kΩ en SDA/SCL a 3.3V/5V si tu cableado no las trae ya
 (un módulo PCF8574 real normalmente las incluye).
 
-Los pines `D2`..`D9` del Nano reflejan los bits 0..7 del PCF8574 emulado. Por
-defecto el firmware de MeshCore solo controla el bit 0
-(`PCF8574_ACTUATOR_PIN=0`), así que `D2` es el pin a observar para el
-comando `ACTUATOR_ON` / `ACTUATOR_OFF`.
+Los pines `D2`..`D9` del Nano reflejan los bits 0..7 del PCF8574 emulado.
+El firmware de MeshCore puede controlar cualquiera de los 8 de forma
+independiente: el comando `PIN<n>_ON` / `PIN<n>_OFF` (con `<n>` de `0` a
+`7`) selecciona el bit, así que `PIN0_ON` mueve `D2`, `PIN3_ON` mueve `D5`,
+etc. (`Dx` = `D2 + n`).
 
 ## Compilar y flashear
 
@@ -45,7 +46,10 @@ upload, prueba con el bootloader "antiguo" (57600 baudios):
 pio run -e nano_old_bootloader -t upload
 ```
 
-Monitor serie (imprime cada escritura I2C recibida, ej. `I2C write: 0x01`):
+Monitor serie (imprime cada escritura I2C recibida, ej. `I2C write: 0x01`,
+más una línea por cada pin cuyo estado cambió respecto a la escritura
+anterior, ej. `  pin 0 -> HIGH`, útil para verificar de un vistazo un
+comando que solo debería tocar un pin):
 
 ```sh
 pio device monitor

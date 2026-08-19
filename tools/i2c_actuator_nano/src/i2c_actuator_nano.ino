@@ -16,9 +16,9 @@
  *   4.7k pull-ups on SDA/SCL to 3.3V/5V if your wiring doesn't already
  *   have them (a real PCF8574 module usually includes them).
  *
- * Output pins D2..D9 mirror PCF8574 bits 0..7. By default the
- * MeshCore firmware only drives bit 0 (PCF8574_ACTUATOR_PIN=0), so
- * D2 is the one to watch for the ACTUATOR_ON / ACTUATOR_OFF command.
+ * Output pins D2..D9 mirror PCF8574 bits 0..7. The MeshCore firmware
+ * can drive any of the 8 independently via the "PIN<n>_ON" / "PIN<n>_OFF"
+ * command (n = 0-7), so watch Dx = D2 + n for a given pin n.
  *
  * Protocol emulated: a single-byte I2C write sets all 8 quasi-
  * bidirectional pins at once, same as a real PCF8574 - no internal
@@ -45,11 +45,25 @@ void onI2CReceive(int num_bytes) {
   while (Wire.available()) {
     state = Wire.read();   // PCF8574 only cares about the last byte written
   }
+
+  uint8_t prev_state = last_state;
   last_state = state;
   applyState(state);
 
   Serial.print("I2C write: 0x");
   Serial.println(state, HEX);
+
+  // with multiple independently-addressable pins, call out exactly which
+  // bit(s) flipped so a multi-pin command is easy to verify at a glance.
+  uint8_t changed = prev_state ^ state;
+  for (uint8_t i = 0; i < NUM_PINS; i++) {
+    if (changed & (1 << i)) {
+      Serial.print("  pin ");
+      Serial.print(i);
+      Serial.print(" -> ");
+      Serial.println((state & (1 << i)) ? "HIGH" : "LOW");
+    }
+  }
 }
 
 void setup() {
