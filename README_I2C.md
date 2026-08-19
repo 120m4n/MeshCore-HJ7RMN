@@ -147,6 +147,7 @@ modifica `MyMesh::checkActuatorCommand()` en
 ## Ver también
 
 - `DEPLOY_I2C.md` — cómo compilar y flashear esta variante del firmware.
-- `tools/i2c_actuator_nano/` — sketch de Arduino para un Arduino Nano que
-  emula un PCF8574 real, útil para probar el comando de extremo a extremo
-  sin necesidad de tener el chip físico.
+- `tools/i2c_actuator_nano/` — proyecto PlatformIO independiente para un
+  Arduino Nano que emula un PCF8574 real, útil para probar el comando de
+  extremo a extremo sin necesidad de tener el chip físico
+  (`cd tools/i2c_actuator_nano && pio run -t upload`, ver su `README.md`).
