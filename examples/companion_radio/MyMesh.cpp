@@ -575,7 +575,7 @@ static bool parseActuatorCmd(const char* text, uint8_t* pin, bool* state) {
     if (memcmp(cmd, prefix, prefix_len) != 0) continue;
 
     char digit = cmd[prefix_len];
-    if (digit < '0' || digit > '7') continue;
+    if (digit < '0' || digit > '0' + PCF8574_MAX_PIN) continue;
     if (strcmp(cmd + prefix_len + 1, suffix) != 0) continue;
 
     *pin = (uint8_t)(digit - '0');

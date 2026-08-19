@@ -11,7 +11,11 @@ void PCF8574Actuator::begin(TwoWire& wire, uint8_t i2c_addr) {
 }
 
 bool PCF8574Actuator::setPin(uint8_t pin, bool state) {
-  if (_wire == NULL || pin > 7) return false;
+  if (pin > PCF8574_MAX_PIN) {
+    MESH_DEBUG_PRINTLN("PCF8574Actuator: pin %d out of range (max %d)", (uint32_t)pin, (uint32_t)PCF8574_MAX_PIN);
+    return false;
+  }
+  if (_wire == NULL) return false;
 
   if (state) {
     _out_state |= (1 << pin);
