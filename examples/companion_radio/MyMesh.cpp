@@ -612,8 +612,10 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
 
   actuator.setPin(pin, state);
 
-#ifdef PIN_LED
-  digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);   // local confirmation blink
+#if defined(PIN_LED) && defined(MESH_DEBUG)
+  // debug builds only - a battery/solar node in an enclosure shouldn't
+  // burn power blinking a confirmation LED nobody is watching.
+  digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);
 #endif
 }
 #endif
