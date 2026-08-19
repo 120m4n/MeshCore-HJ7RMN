@@ -9,6 +9,8 @@
 #define PCF8574_I2C_ADDR 0x20
 #endif
 
+#define PCF8574_MAX_PIN 7   // PCF8574 has 8 pins, addressed 0-7
+
 /*
  * Minimal driver for a PCF8574 I2C GPIO expander used to drive an
  * external actuator (relay, etc.) from a companion radio command.
