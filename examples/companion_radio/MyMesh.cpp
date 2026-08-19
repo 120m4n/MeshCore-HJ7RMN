@@ -4,11 +4,14 @@
 #include <Mesh.h>
 
 #ifdef HAS_PCF8574_ACTUATOR
-#ifndef ACTUATOR_CMD_ON
-#define ACTUATOR_CMD_ON "ACTUATOR_ON"
+#ifndef ACTUATOR_CMD_PREFIX
+#define ACTUATOR_CMD_PREFIX "PIN"
 #endif
-#ifndef ACTUATOR_CMD_OFF
-#define ACTUATOR_CMD_OFF "ACTUATOR_OFF"
+#ifndef ACTUATOR_CMD_ON_SUFFIX
+#define ACTUATOR_CMD_ON_SUFFIX "_ON"
+#endif
+#ifndef ACTUATOR_CMD_OFF_SUFFIX
+#define ACTUATOR_CMD_OFF_SUFFIX "_OFF"
 #endif
 #endif
 
@@ -553,13 +556,33 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
 
 #ifdef HAS_PCF8574_ACTUATOR
 // group text messages are always sent as "<sender_name>: <text>" (see
-// BaseChatMesh::sendGroupMessage), so match the command as a suffix
-// instead of an exact match against the whole message.
-static bool textEndsWithCmd(const char* text, const char* cmd) {
+// BaseChatMesh::sendGroupMessage), so match the command as a suffix of the
+// form "<PREFIX><pin>_ON" / "<PREFIX><pin>_OFF" (pin is a single digit,
+// 0-7, matching the 8 pins of the PCF8574) instead of an exact match
+// against the whole message.
+static bool parseActuatorCmd(const char* text, uint8_t* pin, bool* state) {
   size_t text_len = strlen(text);
-  size_t cmd_len = strlen(cmd);
-  if (cmd_len > text_len) return false;
-  return strcmp(text + (text_len - cmd_len), cmd) == 0;
+  const char* prefix = ACTUATOR_CMD_PREFIX;
+  size_t prefix_len = strlen(prefix);
+
+  for (int i = 0; i < 2; i++) {
+    const char* suffix = (i == 0) ? ACTUATOR_CMD_ON_SUFFIX : ACTUATOR_CMD_OFF_SUFFIX;
+    size_t suffix_len = strlen(suffix);
+    size_t cmd_len = prefix_len + 1 + suffix_len;   // prefix + 1 digit + suffix
+    if (cmd_len > text_len) continue;
+
+    const char* cmd = text + (text_len - cmd_len);
+    if (memcmp(cmd, prefix, prefix_len) != 0) continue;
+
+    char digit = cmd[prefix_len];
+    if (digit < '0' || digit > '7') continue;
+    if (strcmp(cmd + prefix_len + 1, suffix) != 0) continue;
+
+    *pin = (uint8_t)(digit - '0');
+    *state = (i == 0);
+    return true;
+  }
+  return false;
 }
 
 // only channels whose secret is the sha256("<name>")[:16] hashtag-channel
@@ -572,12 +595,9 @@ static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel
 }
 
 void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char* text) {
+  uint8_t pin;
   bool state;
-  if (textEndsWithCmd(text, ACTUATOR_CMD_ON)) {
-    state = true;
-  } else if (textEndsWithCmd(text, ACTUATOR_CMD_OFF)) {
-    state = false;
-  } else {
+  if (!parseActuatorCmd(text, &pin, &state)) {
     return;   // not an actuator command
   }
 
@@ -588,9 +608,9 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
     return;
   }
 
-  MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)PCF8574_ACTUATOR_PIN, (uint32_t)state);
+  MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)pin, (uint32_t)state);
 
-  actuator.setPin(PCF8574_ACTUATOR_PIN, state);
+  actuator.setPin(pin, state);
 
 #ifdef PIN_LED
   digitalWrite(PIN_LED, LOW); delay(100); digitalWrite(PIN_LED, HIGH);   // local confirmation blink

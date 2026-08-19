@@ -110,9 +110,9 @@ no responde.
 1. Desde la app companion, escanea y empareja con el nodo (nombre con
    prefijo `MeshCore-...`, PIN = `BLE_PIN_CODE`, por defecto `123456` en
    `variants/xiao_nrf52/platformio.ini`).
-2. Únete al canal `Public` (o el que hayas configurado, ver
-   `README_I2C.md`).
-3. Envía el mensaje de texto `ACTUATOR_ON` al canal.
+2. Únete a un canal hashtag propio (ver `README_I2C.md` — el canal `Public`
+   nunca dispara el actuador).
+3. Envía el mensaje de texto `PIN0_ON` al canal.
 
 Con `MESH_DEBUG` activo, `MyMesh::checkActuatorCommand()` ahora imprime una
 línea explícita al hacer match:
@@ -121,26 +121,30 @@ línea explícita al hacer match:
 DEBUG: checkActuatorCommand: keyword matched, setting pin 0 to 1
 ```
 
-(pin y valor según `PCF8574_ACTUATOR_PIN` y si fue `ACTUATOR_ON`/`_OFF`).
-Si el texto recibido no coincide con ninguna palabra clave, no se imprime
-nada — solo verás el tráfico genérico de radio/mesh de la recepción del
-mensaje.
+(pin y valor según el dígito del comando y si fue sufijo `_ON`/`_OFF`).
+Si el texto recibido no coincide con ningún comando (o el dígito está
+fuera de `0`-`7`), no se imprime nada — solo verás el tráfico genérico de
+radio/mesh de la recepción del mensaje.
 
 ## Paso 6 — Confirmar la escritura I2C con el Nano de prueba
 
 En paralelo, abre el monitor serie del Nano (Arduino IDE Serial Monitor, o
 `pio device monitor` apuntando a su puerto, 115200 baudios). Al enviar
-`ACTUATOR_ON` deberías ver:
+`PIN0_ON` deberías ver:
 
 ```
 I2C write: 0x01
 ```
 
-y al enviar `ACTUATOR_OFF`:
+y al enviar `PIN0_OFF`:
 
 ```
 I2C write: 0x00
 ```
+
+Prueba también con otro pin, ej. `PIN3_ON`, y confirma que solo cambia el
+bit correspondiente (`I2C write: 0x08`), sin afectar el estado de los
+demás pines.
 
 Esto confirma sin ambigüedad que el byte llegó por el bus físico SDA/SCL,
 independientemente de lo que se vea (o no) en la consola de debug de la
