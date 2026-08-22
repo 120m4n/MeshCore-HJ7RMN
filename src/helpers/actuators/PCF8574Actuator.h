@@ -33,7 +33,12 @@ public:
 private:
   TwoWire* _wire = NULL;
   uint8_t _addr = PCF8574_I2C_ADDR;
-  uint8_t _out_state = 0xFF;   // PCF8574 pins idle HIGH
+  // Safe default until begin() confirms the chip's real state (or a chip
+  // never answers): no pin assumed on. Do not change this back to 0xFF -
+  // that reintroduces an assumed all-HIGH state whenever the boot-time
+  // readState() in begin() fails to get an I2C ack (e.g. the actuator board
+  // still booting when the companion powers up on a shared rail).
+  uint8_t _out_state = 0x00;
 
   bool writeState();
 };
