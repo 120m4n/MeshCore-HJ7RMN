@@ -73,6 +73,23 @@ Notas sobre los pines de salida:
   en la mayoría de las NodeMCU, así que el bit 2 también hará parpadear ese
   LED.
 
+## Relés activo-bajo (active-low)
+
+Muchos módulos de relé comerciales activan el relé con el pin en **LOW**
+(no en HIGH). Para que este test double coincida con esa polaridad,
+descomenta en `platformio.ini`:
+
+```ini
+-D ACTIVE_LOW_RELAYS=1
+```
+
+Esto solo invierte el nivel físico que se escribe en cada pin de salida —
+el byte del protocolo I2C (lo que ve `PCF8574Actuator`/`PIN_STATUS` del
+companion) no cambia. También mantiene coherente el estado "todo apagado"
+del arranque (`last_state = 0x00`): con el flag activo, ese `0x00` se
+traduce a pines en HIGH físicamente (relé apagado), no en LOW. El bit 7
+(software-only) no se ve afectado al no tener pin físico.
+
 ## Compilar y flashear
 
 ```sh
