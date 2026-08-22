@@ -38,7 +38,12 @@
 #define NUM_PINS         8
 const uint8_t OUTPUT_PINS[NUM_PINS] = { 2, 3, 4, 5, 6, 7, 8, 9 };
 
-volatile uint8_t last_state = 0xFF;   // PCF8574 pins idle HIGH
+// Boot-time default for THIS rig's own reset, kept LOW to avoid the inrush
+// current all 8 pins driving HIGH at once would cause on whatever is wired
+// to D2..D9. This is independent of the 'r' handler below, which still
+// simulates the real PCF8574's true power-on default (0xFF, idle HIGH) for
+// readState() drift testing.
+volatile uint8_t last_state = 0x00;
 
 void applyState(uint8_t state) {
   for (uint8_t i = 0; i < NUM_PINS; i++) {

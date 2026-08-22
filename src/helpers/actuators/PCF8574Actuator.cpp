@@ -6,8 +6,12 @@
 void PCF8574Actuator::begin(TwoWire& wire, uint8_t i2c_addr) {
   _wire = &wire;
   _addr = i2c_addr;
-  _out_state = 0xFF;
-  writeState();
+
+  // adopt whatever the chip already has instead of unconditionally writing
+  // 0xFF - that forced every pin HIGH at each companion boot, causing an
+  // inrush current spike even when the chip's real pins hadn't changed.
+  uint8_t state;
+  readState(&state);
 }
 
 bool PCF8574Actuator::setPin(uint8_t pin, bool state) {
