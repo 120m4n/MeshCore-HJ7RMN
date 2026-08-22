@@ -30,6 +30,18 @@
  * going through onI2CReceive - this mimics the PCF8574 losing power on
  * its own supply rail while the XIAO companion keeps running with a
  * now-stale cached state, so you can test readState()'s drift detection.
+ *
+ * Active-low relay boards: many commercial relay modules trigger the
+ * relay on a LOW input instead of HIGH. Uncomment -D ACTIVE_LOW_RELAYS=1
+ * in platformio.ini to invert every physical pin write in applyState().
+ * This only flips the GPIO drive level - the I2C protocol byte (what
+ * MeshCore's PCF8574Actuator reads back and logs) is untouched, so
+ * PIN_STATUS/readState() still see the same 0/1 bits either way.
+ * Crucially, this keeps "all pins off" at boot (last_state = 0x00)
+ * mapped to the actually-off physical level for the board you have
+ * wired - without this flag an active-low board would read
+ * last_state=0x00 as "drive every pin LOW", which turns every relay ON
+ * at power-up, the exact inrush this default was added to avoid.
  */
 
 #include <Wire.h>
@@ -47,7 +59,12 @@ volatile uint8_t last_state = 0x00;
 
 void applyState(uint8_t state) {
   for (uint8_t i = 0; i < NUM_PINS; i++) {
-    digitalWrite(OUTPUT_PINS[i], (state & (1 << i)) ? HIGH : LOW);
+    bool bit_on = state & (1 << i);
+#ifdef ACTIVE_LOW_RELAYS
+    digitalWrite(OUTPUT_PINS[i], bit_on ? LOW : HIGH);
+#else
+    digitalWrite(OUTPUT_PINS[i], bit_on ? HIGH : LOW);
+#endif
   }
 }
 
@@ -73,7 +90,11 @@ void onI2CReceive(int num_bytes) {
       Serial.print("  pin ");
       Serial.print(i);
       Serial.print(" -> ");
-      Serial.println((state & (1 << i)) ? "HIGH" : "LOW");
+      Serial.print((state & (1 << i)) ? "HIGH" : "LOW");
+#ifdef ACTIVE_LOW_RELAYS
+      Serial.print((state & (1 << i)) ? " (relay ON, GPIO driven LOW)" : " (relay OFF, GPIO driven HIGH)");
+#endif
+      Serial.println();
     }
   }
 }
@@ -94,6 +115,9 @@ void setup() {
   Wire.onRequest(onI2CRequest);
 
   Serial.println("i2c_actuator_nano ready, listening as PCF8574 stand-in at 0x20");
+#ifdef ACTIVE_LOW_RELAYS
+  Serial.println("ACTIVE_LOW_RELAYS enabled: bit=1 drives GPIO LOW, bit=0 drives GPIO HIGH");
+#endif
   Serial.println("Type 'r' + Enter to simulate the chip losing power (resets to 0xFF)");
 }
 

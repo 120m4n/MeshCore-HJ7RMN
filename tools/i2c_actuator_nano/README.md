@@ -31,6 +31,23 @@ independiente: el comando `PIN<n>_ON` / `PIN<n>_OFF` (con `<n>` de `0` a
 `7`) selecciona el bit, así que `PIN0_ON` mueve `D2`, `PIN3_ON` mueve `D5`,
 etc. (`Dx` = `D2 + n`).
 
+## Relés activo-bajo (active-low)
+
+Muchos módulos de relé comerciales activan el relé con el pin en **LOW**
+(no en HIGH). Este `platformio.ini` trae `ACTIVE_LOW_RELAYS` **activo por
+defecto** porque el módulo de relés usado para probar este rig es
+activo-bajo; comenta la línea si en cambio cableas un módulo activo-alto:
+
+```ini
+-D ACTIVE_LOW_RELAYS=1
+```
+
+Esto solo invierte el nivel físico que se escribe en cada pin de salida —
+el byte del protocolo I2C (lo que ve `PCF8574Actuator`/`PIN_STATUS` del
+companion) no cambia. También mantiene coherente el estado "todo apagado"
+del arranque (`last_state = 0x00`): con el flag activo, ese `0x00` se
+traduce a pines en HIGH físicamente (relé apagado), no en LOW.
+
 ## Compilar y flashear
 
 ```sh
