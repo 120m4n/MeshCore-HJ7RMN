@@ -56,8 +56,8 @@ DHT dht(DHT_PIN, DHT_TYPE);
 #define STATUS_NO_READING_YET 2
 
 volatile uint8_t status_byte = STATUS_NO_READING_YET;
-volatile float cached_temp_c = 0.0f;
-volatile float cached_hum_pct = 0.0f;
+volatile int16_t cached_temp_x10 = 0;    // temperature * 10 (int16_t for atomic ISR access)
+volatile uint16_t cached_hum_x10 = 0;    // humidity * 10 (uint16_t for atomic ISR access)
 unsigned long last_read_ms = 0;
 
 void readSensor() {
@@ -72,9 +72,16 @@ void readSensor() {
     return;
   }
 
-  cached_temp_c = t;
-  cached_hum_pct = h;
+  // Precompute integer values and cache them atomically (under critical section)
+  // to ensure ISR never reads torn values when converting to I2C payload.
+  int16_t t_x10 = (int16_t)(t * 10.0f);
+  uint16_t h_x10 = (uint16_t)(h * 10.0f);
+
+  noInterrupts();
+  cached_temp_x10 = t_x10;
+  cached_hum_x10 = h_x10;
   status_byte = STATUS_OK;
+  interrupts();
 
   Serial.print("AM2301 read OK: temp=");
   Serial.print(t, 1);
@@ -92,18 +99,23 @@ void printCachedReading() {
   switch (status_byte) {
     case STATUS_OK:     Serial.print("OK"); break;
     case STATUS_CACHED: Serial.print("CACHED"); break;
-    default:             Serial.print("NO_READING_YET"); break;
+    default:            Serial.print("NO_READING_YET"); break;
   }
   Serial.print(" temp=");
-  Serial.print(cached_temp_c, 1);
+  Serial.print(cached_temp_x10 / 10.0, 1);
   Serial.print("C hum=");
-  Serial.print(cached_hum_pct, 1);
+  Serial.print(cached_hum_x10 / 10.0, 1);
   Serial.println("%");
 }
 
 void onI2CRequest() {
-  int16_t temp_x10 = (int16_t)(cached_temp_c * 10.0f);
-  uint16_t hum_x10 = (uint16_t)(cached_hum_pct * 10.0f);
+  // Snapshot cached values to avoid reading torn values if readSensor() updates
+  // them while we're executing (though ISR context means interrupts are already
+  // disabled, this snapshot keeps the intent explicit and safe).
+  noInterrupts();
+  int16_t temp_x10 = cached_temp_x10;
+  uint16_t hum_x10 = cached_hum_x10;
+  interrupts();
 
   uint8_t buf[5];
   buf[0] = status_byte;
