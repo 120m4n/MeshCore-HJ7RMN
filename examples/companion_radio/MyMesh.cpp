@@ -18,6 +18,36 @@
 #endif
 #endif
 
+#ifdef HAS_AM2301_SENSOR
+#ifndef SENSOR_CMD_STATUS
+#define SENSOR_CMD_STATUS "TEMP_STATUS"
+#endif
+#endif
+
+#if defined(HAS_AM2301_SENSOR) && !defined(HAS_PCF8574_ACTUATOR)
+// matches a literal command word as a suffix of the message (no digit) -
+// same suffix-matching rationale as the actuator's parseActuatorCmd().
+// Duplicated from the HAS_PCF8574_ACTUATOR block below only for builds
+// that have the sensor but not the actuator - when both are defined, the
+// actuator block's copies are used and this one is compiled out to avoid
+// a duplicate-symbol error.
+static bool textEndsWithCmd(const char* text, const char* cmd) {
+  size_t text_len = strlen(text);
+  size_t cmd_len = strlen(cmd);
+  if (cmd_len > text_len) return false;
+  return strcmp(text + (text_len - cmd_len), cmd) == 0;
+}
+
+// only channels whose secret is the sha256("<name>")[:16] hashtag-channel
+// key are authorized to trigger the sensor command - excludes both the
+// shared "Public" channel and any private (randomly-keyed) channel.
+static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel) {
+  uint8_t expected[16];
+  mesh::Utils::sha256(expected, sizeof(expected), (const uint8_t*)name, strlen(name));
+  return memcmp(expected, channel.secret, sizeof(expected)) == 0;
+}
+#endif // defined(HAS_AM2301_SENSOR) && !defined(HAS_PCF8574_ACTUATOR)
+
 #define CMD_APP_START                 1
 #define CMD_SEND_TXT_MSG              2
 #define CMD_SEND_CHANNEL_TXT_MSG      3
@@ -675,10 +705,44 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
 }
 #endif
 
+#ifdef HAS_AM2301_SENSOR
+void MyMesh::checkSensorCommand(const mesh::GroupChannel& channel, const char* text) {
+  if (!textEndsWithCmd(text, SENSOR_CMD_STATUS)) return;   // not a sensor command
+
+  int idx = findChannelIdx(channel);
+  ChannelDetails details;
+  if (idx < 0 || !getChannel(idx, details) || !isHashtagChannel(details.name, channel)) {
+    MESH_DEBUG_PRINTLN("checkSensorCommand: keyword matched but channel is not an authorized hashtag channel, ignoring");
+    return;
+  }
+
+  MESH_DEBUG_PRINTLN("checkSensorCommand: status query matched");
+
+  float temp_c, hum_pct;
+  uint8_t status;
+  bool ok = sensor_am2301.read(&temp_c, &hum_pct, &status);
+
+  char msg[48];
+  if (!ok) {
+    snprintf(msg, sizeof(msg), "TEMP=n/a HUM=n/a (i2c error)");
+  } else if (status == AM2301_STATUS_NO_READING_YET) {
+    snprintf(msg, sizeof(msg), "TEMP=n/a HUM=n/a (no reading yet)");
+  } else if (status == AM2301_STATUS_CACHED) {
+    snprintf(msg, sizeof(msg), "TEMP=%.1fC HUM=%.1f%% (cached)", temp_c, hum_pct);
+  } else {
+    snprintf(msg, sizeof(msg), "TEMP=%.1fC HUM=%.1f%%", temp_c, hum_pct);
+  }
+  sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+}
+#endif
+
 void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp,
                                   const char *text) {
 #ifdef HAS_PCF8574_ACTUATOR
   checkActuatorCommand(channel, text);
+#endif
+#ifdef HAS_AM2301_SENSOR
+  checkSensorCommand(channel, text);
 #endif
 
   int i = 0;
@@ -1040,6 +1104,9 @@ void MyMesh::begin(bool has_display) {
 
 #ifdef HAS_PCF8574_ACTUATOR
   actuator.begin(Wire);
+#endif
+#ifdef HAS_AM2301_SENSOR
+  sensor_am2301.begin(Wire);
 #endif
 
   if (!_store->loadMainIdentity(self_id)) {
