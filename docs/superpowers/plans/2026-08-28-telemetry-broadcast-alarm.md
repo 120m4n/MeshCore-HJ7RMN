@@ -288,7 +288,7 @@ git commit -m "Add pure temp/humidity extraction and alarm hysteresis logic"
   (`TelemetryBroadcaster::loop`) and Task 5 (`MyMesh.cpp` custom-vars)
   read/write these by name.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `test/test_companion_node_prefs/test_companion_node_prefs.cpp`,
 above the `int main(...)` at the bottom:
@@ -325,12 +325,12 @@ TEST(CompanionNodePrefs, TelemetryBroadcastDefaultsAreSensible) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pio test -e native -f test_companion_node_prefs`
 Expected: FAIL to compile - `NodePrefs` has no `telemetry_broadcast_enabled` member.
 
-- [ ] **Step 3: Add the fields and nested prefs class**
+- [x] **Step 3: Add the fields and nested prefs class**
 
 Modify `examples/companion_radio/NodePrefs.h`. First, the field block —
 find:
@@ -434,7 +434,7 @@ Replace with:
   NodePrefs() : radio(this), gps(this), companion(this), telemetry_broadcast(this) {
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pio test -e native -f test_companion_node_prefs`
 Expected: `2 test cases: 2 succeeded` (the file's only other
@@ -443,12 +443,12 @@ verified earlier in this session that the file currently builds with
 "0 test cases: 0 succeeded", so the 2 new tests are the only active
 ones).
 
-- [ ] **Step 5: Run the full native suite to confirm no regressions**
+- [x] **Step 5: Run the full native suite to confirm no regressions**
 
 Run: `pio test -e native`
 Expected: all suites still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add examples/companion_radio/NodePrefs.h test/test_companion_node_prefs/test_companion_node_prefs.cpp
@@ -481,7 +481,7 @@ whole `.cpp`) and is not natively unit tested - see "Note on test
 coverage vs. the spec" above. It is verified in Task 4 via a real board
 compile.
 
-- [ ] **Step 1: Write the header**
+- [x] **Step 1: Write the header**
 
 Create `examples/companion_radio/TelemetryBroadcaster.h`:
 
@@ -518,7 +518,7 @@ private:
 #endif // ifdef HAS_TELEMETRY_BROADCAST
 ```
 
-- [ ] **Step 2: Write the implementation**
+- [x] **Step 2: Write the implementation**
 
 Create `examples/companion_radio/TelemetryBroadcaster.cpp`:
 
@@ -614,7 +614,7 @@ void TelemetryBroadcaster::loop(BaseChatMesh& mesh, EnvironmentSensorManager& se
 #endif // ifdef HAS_TELEMETRY_BROADCAST
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 This task cannot build/run standalone yet (needs Task 4's build flags
 and `build_src_filter` entries to even compile) - commit as work in
@@ -640,7 +640,7 @@ git commit -m "Add TelemetryBroadcaster: CayenneLPP-based sensor read + channel 
 - Produces: working, board-compiled feature, gated entirely behind
   `HAS_TELEMETRY_BROADCAST`.
 
-- [ ] **Step 1: Add the include and global instance**
+- [x] **Step 1: Add the include and global instance**
 
 Modify `examples/companion_radio/main.cpp`. Find:
 
@@ -673,7 +673,7 @@ TelemetryBroadcaster telemetry_broadcaster;
 /* END GLOBAL OBJECTS */
 ```
 
-- [ ] **Step 2: Call it from `loop()`**
+- [x] **Step 2: Call it from `loop()`**
 
 Find:
 
@@ -702,7 +702,7 @@ void loop() {
 #endif
 ```
 
-- [ ] **Step 3: Add build flags and source files to the XIAO `_i2c_sensors` envs**
+- [x] **Step 3: Add build flags and source files to the XIAO `_i2c_sensors` envs**
 
 Modify `variants/xiao_nrf52/platformio.ini`. In
 `[env:Xiao_nrf52_companion_radio_ble_i2c_sensors]`, find:
@@ -786,7 +786,7 @@ lib_deps =
 [env:Xiao_nrf52_repeater]
 ```
 
-- [ ] **Step 4: Verify the envs still build with the flag OFF (default, commented out)**
+- [x] **Step 4: Verify the envs still build with the flag OFF (default, commented out)**
 
 Run:
 ```bash
@@ -809,7 +809,7 @@ worth it. Treat "unchanged" as "changed by a couple hundred bytes at
 most, from TelemetryBroadcastLogic.cpp alone" - a jump of kilobytes
 would mean something is wrong.
 
-- [ ] **Step 5: Verify the feature actually compiles when turned on**
+- [x] **Step 5: Verify the feature actually compiles when turned on**
 
 Temporarily uncomment the 4 new flags in
 `[env:Xiao_nrf52_companion_radio_ble_i2c_sensors]` (from Step 3), then:
@@ -831,7 +831,7 @@ pio run -e Xiao_nrf52_companion_radio_ble_i2c_sensors
 ```
 Expected: `SUCCESS`.
 
-- [ ] **Step 6: Verify the actuator and plain envs are untouched**
+- [x] **Step 6: Verify the actuator and plain envs are untouched**
 
 ```bash
 pio run -e Xiao_nrf52_companion_radio_ble -e Xiao_nrf52_companion_radio_usb
@@ -840,13 +840,13 @@ Expected: both `SUCCESS`, unchanged from before this task (these envs
 don't reference `TelemetryBroadcaster.h` at all, and
 `HAS_TELEMETRY_BROADCAST` is never defined for them).
 
-- [ ] **Step 7: Run the full native suite once more**
+- [x] **Step 7: Run the full native suite once more**
 
 Run: `pio test -e native`
 Expected: unchanged, all suites pass (this task touches no
 natively-tested code).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add examples/companion_radio/main.cpp variants/xiao_nrf52/platformio.ini
@@ -870,7 +870,7 @@ This is the one touchpoint shared with existing dispatcher code
 `gps`/`gps_interval`). Both edits are purely additive - the existing
 `sensors.setSettingValue()`/GPS branches are untouched.
 
-- [ ] **Step 1: Extend `CMD_SET_CUSTOM_VAR` to recognize the 4 new names**
+- [x] **Step 1: Extend `CMD_SET_CUSTOM_VAR` to recognize the 4 new names**
 
 Find, in `examples/companion_radio/MyMesh.cpp`:
 
@@ -955,7 +955,7 @@ Replace with:
     }
 ```
 
-- [ ] **Step 2: Extend `CMD_GET_CUSTOM_VARS` to list the 4 new names**
+- [x] **Step 2: Extend `CMD_GET_CUSTOM_VARS` to list the 4 new names**
 
 Find:
 
@@ -1023,7 +1023,7 @@ Replace with:
     _serial->writeFrame(out_frame, dp - (char *)out_frame);
 ```
 
-- [ ] **Step 3: Build-verify with the flag on and off**
+- [x] **Step 3: Build-verify with the flag on and off**
 
 ```bash
 export FIRMWARE_VERSION=v1.0.0-test
@@ -1040,12 +1040,12 @@ pio run -e Xiao_nrf52_companion_radio_ble_i2c_sensors
 Expected: `SUCCESS`. Re-comment the flags back out afterward and confirm
 `SUCCESS` again.
 
-- [ ] **Step 4: Run the full native suite one last time**
+- [x] **Step 4: Run the full native suite one last time**
 
 Run: `pio test -e native`
 Expected: unchanged, all suites pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add examples/companion_radio/MyMesh.cpp
