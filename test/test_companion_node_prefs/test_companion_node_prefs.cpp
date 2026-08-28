@@ -47,6 +47,12 @@ public:
   size_t print(long long value, int = DEC) override { return emit(value); }
   size_t print(unsigned long long value, int = DEC) override { return emit(value); }
 
+  size_t print(double value, int decimal_places = 2) override {
+    char text[32];
+    int length = snprintf(text, sizeof(text), "%.*f", decimal_places, value);
+    return write(reinterpret_cast<const uint8_t*>(text), length);
+  }
+
   const std::string& text() const { return _text; }
 };
 
@@ -76,6 +82,36 @@ TEST(CompanionNodePrefs, RxGainSettingsRoundTripIndependently) {
   EXPECT_EQ(1, loaded.radio_fem_txgain);
 }
 #endif
+
+TEST(CompanionNodePrefs, TelemetryBroadcastSettingsRoundTrip) {
+  NodePrefs saved;
+  saved.telemetry_broadcast_enabled = 1;
+  saved.telemetry_broadcast_interval_sec = 900;
+  saved.telemetry_alarm_enabled = 1;
+  saved.telemetry_alarm_threshold_c = 38.5f;
+
+  CaptureStream output;
+  ASSERT_TRUE(saved.saveSerial(output));
+  EXPECT_NE(std::string::npos, output.text().find("bc_en:1"));
+  EXPECT_NE(std::string::npos, output.text().find("bc_int:900"));
+  EXPECT_NE(std::string::npos, output.text().find("al_en:1"));
+
+  ReplayStream input(output.text().c_str());
+  NodePrefs loaded;
+  ASSERT_TRUE(loaded.loadSerial(input));
+  EXPECT_EQ(1, loaded.telemetry_broadcast_enabled);
+  EXPECT_EQ(900u, loaded.telemetry_broadcast_interval_sec);
+  EXPECT_EQ(1, loaded.telemetry_alarm_enabled);
+  EXPECT_FLOAT_EQ(38.5f, loaded.telemetry_alarm_threshold_c);
+}
+
+TEST(CompanionNodePrefs, TelemetryBroadcastDefaultsAreSensible) {
+  NodePrefs prefs;
+  EXPECT_EQ(1, prefs.telemetry_broadcast_enabled);
+  EXPECT_EQ(1800u, prefs.telemetry_broadcast_interval_sec);
+  EXPECT_EQ(1, prefs.telemetry_alarm_enabled);
+  EXPECT_FLOAT_EQ(45.0f, prefs.telemetry_alarm_threshold_c);
+}
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
