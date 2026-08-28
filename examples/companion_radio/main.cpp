@@ -1,6 +1,9 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 #include "MyMesh.h"
+#ifdef HAS_TELEMETRY_BROADCAST
+#include "TelemetryBroadcaster.h"
+#endif
 
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
@@ -100,6 +103,10 @@ MyMesh the_mesh(radio_driver, fast_rng, rtc_clock, tables, store
       , &ui_task
    #endif
 );
+
+#ifdef HAS_TELEMETRY_BROADCAST
+TelemetryBroadcaster telemetry_broadcaster;
+#endif
 
 /* END GLOBAL OBJECTS */
 
@@ -248,6 +255,9 @@ void loop() {
   the_mesh.loop();
   interface_manager.loop();
   sensors.loop();
+#ifdef HAS_TELEMETRY_BROADCAST
+  telemetry_broadcaster.loop(the_mesh, sensors, *the_mesh.getNodePrefs());
+#endif
 #ifdef DISPLAY_CLASS
   ui_task.loop();
 #endif
