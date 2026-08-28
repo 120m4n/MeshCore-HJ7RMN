@@ -18,36 +18,6 @@
 #endif
 #endif
 
-#ifdef HAS_AM2301_SENSOR
-#ifndef SENSOR_CMD_STATUS
-#define SENSOR_CMD_STATUS "TEMP_STATUS"
-#endif
-#endif
-
-#if defined(HAS_AM2301_SENSOR) && !defined(HAS_PCF8574_ACTUATOR)
-// matches a literal command word as a suffix of the message (no digit) -
-// same suffix-matching rationale as the actuator's parseActuatorCmd().
-// Duplicated from the HAS_PCF8574_ACTUATOR block below only for builds
-// that have the sensor but not the actuator - when both are defined, the
-// actuator block's copies are used and this one is compiled out to avoid
-// a duplicate-symbol error.
-static bool textEndsWithCmd(const char* text, const char* cmd) {
-  size_t text_len = strlen(text);
-  size_t cmd_len = strlen(cmd);
-  if (cmd_len > text_len) return false;
-  return strcmp(text + (text_len - cmd_len), cmd) == 0;
-}
-
-// only channels whose secret is the sha256("<name>")[:16] hashtag-channel
-// key are authorized to trigger the sensor command - excludes both the
-// shared "Public" channel and any private (randomly-keyed) channel.
-static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel) {
-  uint8_t expected[16];
-  mesh::Utils::sha256(expected, sizeof(expected), (const uint8_t*)name, strlen(name));
-  return memcmp(expected, channel.secret, sizeof(expected)) == 0;
-}
-#endif // defined(HAS_AM2301_SENSOR) && !defined(HAS_PCF8574_ACTUATOR)
-
 #define CMD_APP_START                 1
 #define CMD_SEND_TXT_MSG              2
 #define CMD_SEND_CHANNEL_TXT_MSG      3
@@ -705,44 +675,10 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
 }
 #endif
 
-#ifdef HAS_AM2301_SENSOR
-void MyMesh::checkSensorCommand(const mesh::GroupChannel& channel, const char* text) {
-  if (!textEndsWithCmd(text, SENSOR_CMD_STATUS)) return;   // not a sensor command
-
-  int idx = findChannelIdx(channel);
-  ChannelDetails details;
-  if (idx < 0 || !getChannel(idx, details) || !isHashtagChannel(details.name, channel)) {
-    MESH_DEBUG_PRINTLN("checkSensorCommand: keyword matched but channel is not an authorized hashtag channel, ignoring");
-    return;
-  }
-
-  MESH_DEBUG_PRINTLN("checkSensorCommand: status query matched");
-
-  float temp_c, hum_pct;
-  uint8_t status;
-  bool ok = sensor_am2301.read(&temp_c, &hum_pct, &status);
-
-  char msg[48];
-  if (!ok) {
-    snprintf(msg, sizeof(msg), "TEMP=n/a HUM=n/a (i2c error)");
-  } else if (status == AM2301_STATUS_NO_READING_YET) {
-    snprintf(msg, sizeof(msg), "TEMP=n/a HUM=n/a (no reading yet)");
-  } else if (status == AM2301_STATUS_CACHED) {
-    snprintf(msg, sizeof(msg), "TEMP=%.1fC HUM=%.1f%% (cached)", temp_c, hum_pct);
-  } else {
-    snprintf(msg, sizeof(msg), "TEMP=%.1fC HUM=%.1f%%", temp_c, hum_pct);
-  }
-  sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
-}
-#endif
-
 void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp,
                                   const char *text) {
 #ifdef HAS_PCF8574_ACTUATOR
   checkActuatorCommand(channel, text);
-#endif
-#ifdef HAS_AM2301_SENSOR
-  checkSensorCommand(channel, text);
 #endif
 
   int i = 0;
@@ -1104,9 +1040,6 @@ void MyMesh::begin(bool has_display) {
 
 #ifdef HAS_PCF8574_ACTUATOR
   actuator.begin(Wire);
-#endif
-#ifdef HAS_AM2301_SENSOR
-  sensor_am2301.begin(Wire);
 #endif
 
   if (!_store->loadMainIdentity(self_id)) {
@@ -2012,16 +1945,44 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_GET_CUSTOM_VARS) {
     out_frame[0] = RESP_CODE_CUSTOM_VARS;
     char *dp = (char *)&out_frame[1];
+    bool wrote_any = false;
     for (int i = 0; i < sensors.getNumSettings() && dp - (char *)&out_frame[1] < 140; i++) {
-      if (i > 0) {
+      if (wrote_any) {
         *dp++ = ',';
       }
+      wrote_any = true;
       strcpy(dp, sensors.getSettingName(i));
       dp = strchr(dp, 0);
       *dp++ = ':';
       strcpy(dp, sensors.getSettingValue(i));
       dp = strchr(dp, 0);
     }
+#ifdef HAS_TELEMETRY_BROADCAST
+    {
+      const char* tb_names[4] = {
+        "telemetry_broadcast_enabled", "telemetry_broadcast_interval_sec",
+        "telemetry_alarm_enabled", "telemetry_alarm_threshold_c"
+      };
+      char val[12];
+      for (int i = 0; i < 4 && dp - (char *)&out_frame[1] < 140; i++) {
+        switch (i) {
+          case 0: snprintf(val, sizeof(val), "%u", (unsigned)_prefs.telemetry_broadcast_enabled); break;
+          case 1: snprintf(val, sizeof(val), "%lu", (unsigned long)_prefs.telemetry_broadcast_interval_sec); break;
+          case 2: snprintf(val, sizeof(val), "%u", (unsigned)_prefs.telemetry_alarm_enabled); break;
+          default: snprintf(val, sizeof(val), "%.1f", _prefs.telemetry_alarm_threshold_c); break;
+        }
+        if (wrote_any) {
+          *dp++ = ',';
+        }
+        wrote_any = true;
+        strcpy(dp, tb_names[i]);
+        dp = strchr(dp, 0);
+        *dp++ = ':';
+        strcpy(dp, val);
+        dp = strchr(dp, 0);
+      }
+    }
+#endif
     _serial->writeFrame(out_frame, dp - (char *)out_frame);
   } else if (cmd_frame[0] == CMD_SET_CUSTOM_VAR && len >= 4) {
     cmd_frame[len] = 0;
@@ -2029,22 +1990,43 @@ void MyMesh::handleCmdFrame(size_t len) {
     char *np = strchr(sp, ':'); // look for separator char
     if (np) {
       *np++ = 0; // modify 'cmd_frame', replace ':' with null
-      bool success = sensors.setSettingValue(sp, np);
-      if (success) {
-        #if ENV_INCLUDE_GPS == 1
-        // Update node preferences for GPS settings
-        if (strcmp(sp, "gps") == 0) {
-          _prefs.gps_enabled = (np[0] == '1') ? 1 : 0;
-          savePrefs();
-        } else if (strcmp(sp, "gps_interval") == 0) {
-          uint32_t interval_seconds = atoi(np);
-          _prefs.gps_interval = constrain(interval_seconds, 0, 86400);
-          savePrefs();
-        }
-        #endif
+#ifdef HAS_TELEMETRY_BROADCAST
+      if (strcmp(sp, "telemetry_broadcast_enabled") == 0) {
+        _prefs.telemetry_broadcast_enabled = (np[0] == '1') ? 1 : 0;
+        savePrefs();
         writeOKFrame();
-      } else {
-        writeErrFrame(ERR_CODE_ILLEGAL_ARG);
+      } else if (strcmp(sp, "telemetry_broadcast_interval_sec") == 0) {
+        _prefs.telemetry_broadcast_interval_sec = constrain((uint32_t)atoi(np), 0, 86400u);
+        savePrefs();
+        writeOKFrame();
+      } else if (strcmp(sp, "telemetry_alarm_enabled") == 0) {
+        _prefs.telemetry_alarm_enabled = (np[0] == '1') ? 1 : 0;
+        savePrefs();
+        writeOKFrame();
+      } else if (strcmp(sp, "telemetry_alarm_threshold_c") == 0) {
+        _prefs.telemetry_alarm_threshold_c = atof(np);
+        savePrefs();
+        writeOKFrame();
+      } else
+#endif
+      {
+        bool success = sensors.setSettingValue(sp, np);
+        if (success) {
+          #if ENV_INCLUDE_GPS == 1
+          // Update node preferences for GPS settings
+          if (strcmp(sp, "gps") == 0) {
+            _prefs.gps_enabled = (np[0] == '1') ? 1 : 0;
+            savePrefs();
+          } else if (strcmp(sp, "gps_interval") == 0) {
+            uint32_t interval_seconds = atoi(np);
+            _prefs.gps_interval = constrain(interval_seconds, 0, 86400);
+            savePrefs();
+          }
+          #endif
+          writeOKFrame();
+        } else {
+          writeErrFrame(ERR_CODE_ILLEGAL_ARG);
+        }
       }
     } else {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG);
