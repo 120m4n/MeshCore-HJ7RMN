@@ -35,6 +35,16 @@ public:
   uint8_t  vibe_quiet = 0;
   uint8_t  gps_enabled = 0;      // GPS enabled flag (0=disabled, 1=enabled)
   uint32_t gps_interval = 0;     // GPS read interval in seconds
+#ifndef TELEMETRY_BROADCAST_INTERVAL_SEC
+#define TELEMETRY_BROADCAST_INTERVAL_SEC 1800  // 30 min
+#endif
+#ifndef TELEMETRY_ALARM_THRESHOLD_C
+#define TELEMETRY_ALARM_THRESHOLD_C 45
+#endif
+  uint8_t  telemetry_broadcast_enabled = 1;      // ON once HAS_TELEMETRY_BROADCAST is opted into
+  uint32_t telemetry_broadcast_interval_sec = TELEMETRY_BROADCAST_INTERVAL_SEC; // 0 = disabled
+  uint8_t  telemetry_alarm_enabled = 1;
+  float    telemetry_alarm_threshold_c = TELEMETRY_ALARM_THRESHOLD_C;
   uint8_t autoadd_config = 0;    // bitmask for auto-add contacts config
   uint8_t rx_boosted_gain = 0; // SX126x RX boosted gain mode (0=power saving, 1=boosted)
   uint8_t radio_fem_rxgain = 0; // external LoRa FEM RX gain (LNA)
@@ -136,6 +146,20 @@ private:
   };
   GPSPrefs gps;
 
+  class TelemetryBroadcastPrefs : public ConfigSerializer {
+    NodePrefs* _parent;
+  protected:
+    void structure() override {
+      def("bc_en", _parent->telemetry_broadcast_enabled);
+      def("bc_int", _parent->telemetry_broadcast_interval_sec);
+      def("al_en", _parent->telemetry_alarm_enabled);
+      def("al_thr", _parent->telemetry_alarm_threshold_c);
+    }
+  public:
+    TelemetryBroadcastPrefs(NodePrefs* parent) : _parent(parent) { }
+  };
+  TelemetryBroadcastPrefs telemetry_broadcast;
+
   class RepeatPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
   public:
     uint8_t disable_fwd = 1;
@@ -204,9 +228,10 @@ protected:
 #ifdef ENABLE_WIFI_INTERFACE
     def("wifi", wifi);
 #endif
+    def("telem_bc", telemetry_broadcast);
   }
 public:
-  NodePrefs() : radio(this), gps(this), companion(this), custom(&radio)
+  NodePrefs() : radio(this), gps(this), companion(this), telemetry_broadcast(this), custom(&radio)
 #ifdef ENABLE_WIFI_INTERFACE
     , wifi(this)
 #endif
