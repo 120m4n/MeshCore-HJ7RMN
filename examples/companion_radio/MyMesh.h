@@ -30,10 +30,6 @@
 #include <helpers/actuators/PCF8574Actuator.h>
 #endif
 
-#ifdef HAS_AM2301_SENSOR
-#include <helpers/i2c_sensors/AM2301RemoteSensor.h>
-#endif
-
 #include <RTClib.h>
 #include <helpers/ArduinoHelpers.h>
 #include <helpers/BaseSerialInterface.h>
@@ -268,11 +264,6 @@ private:
 #ifdef HAS_PCF8574_ACTUATOR
   PCF8574Actuator actuator;
   void checkActuatorCommand(const mesh::GroupChannel& channel, const char* text);
-#endif
-
-#ifdef HAS_AM2301_SENSOR
-  AM2301RemoteSensor sensor_am2301;
-  void checkSensorCommand(const mesh::GroupChannel& channel, const char* text);
 #endif
 };
 
