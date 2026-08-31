@@ -75,6 +75,45 @@ canal cuyo nombre empiece con `#` desde la app companion (ver
 -D ACTUATOR_SEND_ACK=1
 ```
 
+## Compilar el firmware (.bin) con `build.sh`
+
+El repo trae un script (`build.sh`, en la raíz) que compila el env de
+PlatformIO, genera el `.bin` para ESP32 y lo copia a `out/`. Requiere la
+variable `FIRMWARE_VERSION` exportada — el script aborta si no está
+definida:
+
+```bash
+export FIRMWARE_VERSION=v1.0.0
+sh build.sh build-firmware LilyGo_T3S3_sx1276_companion_radio_ble
+```
+
+Esto produce, en `out/`:
+
+- `LilyGo_T3S3_sx1276_companion_radio_ble-v1.0.0-<sha>.bin` — firmware para
+  flashear sobre un bootloader/partición ya existente.
+- `LilyGo_T3S3_sx1276_companion_radio_ble-v1.0.0-<sha>-merged.bin` —
+  imagen completa (bootloader + partición + firmware) para una instalación
+  desde cero con `esptool` (`--flash_mode`/offset `0x0`).
+
+`<sha>` es el hash corto del commit actual (`git rev-parse --short HEAD`) —
+lo añade el script automáticamente al nombre del archivo.
+
+Variables de entorno opcionales:
+
+```bash
+export DISABLE_DEBUG=1   # quita MESH_DEBUG y demás flags de logging antes de compilar
+```
+
+Si quieres el `.bin` sin pasar por `build.sh` (sin nombre versionado, solo
+para probar rápido), el flujo equivalente en PlatformIO puro es:
+
+```bash
+pio run -e LilyGo_T3S3_sx1276_companion_radio_ble
+pio run -t mergebin -e LilyGo_T3S3_sx1276_companion_radio_ble
+# .pio/build/LilyGo_T3S3_sx1276_companion_radio_ble/firmware.bin
+# .pio/build/LilyGo_T3S3_sx1276_companion_radio_ble/firmware-merged.bin
+```
+
 ## Ver también
 
 - `docs/superpowers/specs/2026-08-31-t3s3-gpio-relay-actuator-design.md` —
