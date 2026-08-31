@@ -41,6 +41,43 @@ TEST(BuildRelayStateBits, RendersAllOn) {
   EXPECT_STREQ("1111", out);
 }
 
+TEST(ParseRelayActuatorCmd, MatchesOnCommandAsSuffix) {
+  uint8_t pin; bool state;
+  ASSERT_TRUE(parseRelayActuatorCmd("Node1: PIN2_ON", "PIN", "_ON", "_OFF", &pin, &state));
+  EXPECT_EQ(2, pin);
+  EXPECT_TRUE(state);
+}
+
+TEST(ParseRelayActuatorCmd, MatchesOffCommandAsSuffix) {
+  uint8_t pin; bool state;
+  ASSERT_TRUE(parseRelayActuatorCmd("Node1: PIN0_OFF", "PIN", "_ON", "_OFF", &pin, &state));
+  EXPECT_EQ(0, pin);
+  EXPECT_FALSE(state);
+}
+
+TEST(ParseRelayActuatorCmd, RejectsDigitAboveMaxPin) {
+  uint8_t pin; bool state;
+  EXPECT_FALSE(parseRelayActuatorCmd("Node1: PIN4_ON", "PIN", "_ON", "_OFF", &pin, &state));
+}
+
+TEST(ParseRelayActuatorCmd, RejectsWrongPrefix) {
+  uint8_t pin; bool state;
+  EXPECT_FALSE(parseRelayActuatorCmd("Node1: LED2_ON", "PIN", "_ON", "_OFF", &pin, &state));
+}
+
+TEST(ParseRelayActuatorCmd, RejectsTextShorterThanCommand) {
+  uint8_t pin; bool state;
+  EXPECT_FALSE(parseRelayActuatorCmd("ON", "PIN", "_ON", "_OFF", &pin, &state));
+}
+
+TEST(RelayTextEndsWithCmd, MatchesStatusCommandAsSuffix) {
+  EXPECT_TRUE(relayTextEndsWithCmd("Node1: PIN_STATUS", "PIN_STATUS"));
+}
+
+TEST(RelayTextEndsWithCmd, RejectsNonMatchingSuffix) {
+  EXPECT_FALSE(relayTextEndsWithCmd("Node1: PIN0_ON", "PIN_STATUS"));
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
