@@ -28,6 +28,7 @@ Opcional (más verboso, tráfico LoRa crudo):
 ## Paso 2 — Compilar
 
 ```bash
+export FIRMWARE_VERSION=v1.0.0
 sh build.sh build-firmware Xiao_nrf52_companion_radio_ble
 ```
 

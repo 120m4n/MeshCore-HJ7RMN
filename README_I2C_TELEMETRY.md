@@ -1,8 +1,9 @@
 # Telemetría de sensores I2C nativos (XIAO nRF52840 + Wio-SX1262)
 
 Variante del firmware companion de MeshCore que reporta sensores
-ambientales I2C **nativos** (no puenteados, a diferencia del AM2301 — ver
-`README_I2C_SENSOR.md`) como parte de la telemetría formal del nodo
+ambientales I2C **nativos** (chips con interfaz I2C real, sin necesidad
+de puentear un protocolo de otro tipo a través de un segundo
+microcontrolador) como parte de la telemetría formal del nodo
 (`GetTelemetry`), usando el framework `EnvironmentSensorManager` ya
 integrado en `companion_radio`.
 
@@ -11,8 +12,8 @@ integrado en `companion_radio`.
   que las demás variantes I2C de este directorio.
 - **Firmwares**: `Xiao_nrf52_companion_radio_usb_i2c_sensors` y
   `Xiao_nrf52_companion_radio_ble_i2c_sensors` — variantes limpias,
-  **sin** el actuador PCF8574 ni el puente AM2301 (ver "Por qué una
-  variante separada" más abajo).
+  **sin** el actuador PCF8574 (ver "Por qué una variante separada" más
+  abajo).
 - **Framework**: `src/helpers/sensors/EnvironmentSensorManager.h/.cpp` —
   ya usado por `companion_radio` para responder `GetTelemetry`; esta
   variante no le agrega código nuevo, solo lo activa sin las
@@ -78,10 +79,9 @@ heredado por **todos** los envs `Xiao_nrf52_*` vía `sensor_base`,
 incluidos los `companion_radio_usb`/`_ble` normales — cablear un BME280
 ahí también funcionaría sin cambios. Esta variante existe para tener un
 build limpio, dedicado solo a sensores I2C nativos, sin el actuador
-PCF8574 (`HAS_PCF8574_ACTUATOR`) ni el puente AM2301
-(`HAS_AM2301_SENSOR`) — evita mezclar el modelo de "comando de canal"
-(ver `README_I2C.md` / `README_I2C_SENSOR.md`) con el de telemetría
-formal en el mismo build.
+PCF8574 (`HAS_PCF8574_ACTUATOR`) — evita mezclar el modelo de "comando
+de canal" (ver `README_I2C.md`) con el de telemetría formal en el mismo
+build.
 
 ## Conexión física (BME280)
 
@@ -117,7 +117,5 @@ cableado sin depender de una petición de telemetría completa.
 
 - `README_I2C.md` — actuador I2C sobre PCF8574 (comando de canal, no
   telemetría formal).
-- `README_I2C_SENSOR.md` — sensor AM2301 puenteado por Nano (comando de
-  canal, no telemetría formal).
 - `src/helpers/sensors/EnvironmentSensorManager.cpp` — tabla completa de
   sensores soportados (`SENSOR_TABLE[]`) y su lógica de detección.

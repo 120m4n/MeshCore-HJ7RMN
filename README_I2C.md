@@ -245,5 +245,6 @@ un toggle persistente, modifica `MyMesh::checkActuatorCommand()` en
   Arduino Nano que emula un PCF8574 real, útil para probar el comando de
   extremo a extremo sin necesidad de tener el chip físico
   (`cd tools/i2c_actuator_nano && pio run -t upload`, ver su `README.md`).
-- `README_I2C_SENSOR.md` — comando `TEMP_STATUS` para consultar un sensor
-  AM2301 por el mismo bus I2C y canal hashtag.
+- `README_I2C_TELEMETRY.md` — sensores ambientales I2C **nativos**
+  (BME280 y similares) vía telemetría formal (`GetTelemetry`), en vez de
+  un comando de canal.
