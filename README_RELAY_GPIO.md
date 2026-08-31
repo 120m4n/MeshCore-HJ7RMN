@@ -78,16 +78,28 @@ canal cuyo nombre empiece con `#` desde la app companion (ver
 ## Compilar el firmware (.bin) con `build.sh`
 
 El repo trae un script (`build.sh`, en la raíz) que compila el env de
-PlatformIO, genera el `.bin` para ESP32 y lo copia a `out/`. Requiere la
-variable `FIRMWARE_VERSION` exportada — el script aborta si no está
-definida:
+PlatformIO, genera el `.bin` para ESP32 y lo copia a `out/`. `out/` es
+**relativo al directorio desde donde ejecutas el script** — si este código
+vive en un git worktree (ej.
+`.worktrees/feature/t3s3-relay-gpio-actuator/`), el `.bin` aparece en el
+`out/` *de ese worktree*, no en el `out/` del checkout principal del repo.
+Confirma dónde estás antes de compilar:
+
+```bash
+cd .worktrees/feature/t3s3-relay-gpio-actuator   # o la ruta donde vive esta rama
+pwd                                               # confírmalo
+```
+
+Requiere la variable `FIRMWARE_VERSION` exportada — el script aborta si no
+está definida:
 
 ```bash
 export FIRMWARE_VERSION=v1.0.0
 sh build.sh build-firmware LilyGo_T3S3_sx1276_companion_radio_ble
 ```
 
-Esto produce, en `out/`:
+Esto produce, en `out/` (dentro del directorio desde el que corriste el
+comando):
 
 - `LilyGo_T3S3_sx1276_companion_radio_ble-v1.0.0-<sha>.bin` — firmware para
   flashear sobre un bootloader/partición ya existente.
@@ -96,7 +108,10 @@ Esto produce, en `out/`:
   desde cero con `esptool` (`--flash_mode`/offset `0x0`).
 
 `<sha>` es el hash corto del commit actual (`git rev-parse --short HEAD`) —
-lo añade el script automáticamente al nombre del archivo.
+lo añade el script automáticamente al nombre del archivo. Nota que
+`build.sh` hace `rm -rf out` antes de compilar (línea ~267) — cada corrida
+limpia el `out/` de ese directorio por completo, incluyendo `.bin` de otras
+placas que hayas generado ahí antes.
 
 Variables de entorno opcionales:
 
