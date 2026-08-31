@@ -19,3 +19,15 @@ bool relayLogicalToPhysicalHigh(bool logical_on, bool active_low);
 // IS the channel index - NOT a standard MSB-first binary rendering of the
 // byte.
 void buildRelayStateBits(uint8_t state, char out[5]);
+
+// Parses a "<prefix><digit 0-RELAY_MAX_PIN><suffix>" command as a SUFFIX of
+// `text` (companion group messages are sent as "<sender name>: <text>", so
+// the command is matched at the end of the string, not as an exact match).
+// suffix is on_suffix or off_suffix; on match, fills *pin and *state
+// (true = on_suffix matched) and returns true.
+bool parseRelayActuatorCmd(const char* text, const char* prefix, const char* on_suffix, const char* off_suffix,
+                            uint8_t* pin, bool* state);
+
+// Matches a literal command word (e.g. "PIN_STATUS") as a suffix of `text`,
+// same suffix-matching rationale as parseRelayActuatorCmd, no digit involved.
+bool relayTextEndsWithCmd(const char* text, const char* cmd);
