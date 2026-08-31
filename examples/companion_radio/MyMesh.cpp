@@ -542,8 +542,78 @@ void MyMesh::onSignedMessageRecv(const ContactInfo &from, mesh::Packet *pkt, uin
   queueMessage(from, TXT_TYPE_SIGNED_PLAIN, pkt, sender_timestamp, sender_prefix, 4, text);
 }
 
+#ifdef HAS_GPIO_RELAY_ACTUATOR
+#include <helpers/actuators/GPIORelayLogic.h>
+
+#ifndef ACTUATOR_CMD_PREFIX
+#define ACTUATOR_CMD_PREFIX "PIN"
+#endif
+#ifndef ACTUATOR_CMD_ON_SUFFIX
+#define ACTUATOR_CMD_ON_SUFFIX "_ON"
+#endif
+#ifndef ACTUATOR_CMD_OFF_SUFFIX
+#define ACTUATOR_CMD_OFF_SUFFIX "_OFF"
+#endif
+#ifndef ACTUATOR_CMD_STATUS
+#define ACTUATOR_CMD_STATUS "PIN_STATUS"
+#endif
+
+// only channels whose secret is the sha256("<name>")[:16] hashtag-channel
+// key are authorized to trigger the actuator - excludes both the shared
+// "Public" channel and any private (randomly-keyed) channel.
+static bool isHashtagChannel(const char* name, const mesh::GroupChannel& channel) {
+  uint8_t expected[16];
+  mesh::Utils::sha256(expected, sizeof(expected), (const uint8_t*)name, strlen(name));
+  return memcmp(expected, channel.secret, sizeof(expected)) == 0;
+}
+
+void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char* text) {
+  uint8_t pin;
+  bool state;
+  bool is_write = parseRelayActuatorCmd(text, ACTUATOR_CMD_PREFIX, ACTUATOR_CMD_ON_SUFFIX, ACTUATOR_CMD_OFF_SUFFIX, &pin, &state);
+  bool is_status = !is_write && relayTextEndsWithCmd(text, ACTUATOR_CMD_STATUS);
+  if (!is_write && !is_status) {
+    return;   // not an actuator command
+  }
+
+  int idx = findChannelIdx(channel);
+  ChannelDetails details;
+  if (idx < 0 || !getChannel(idx, details) || !isHashtagChannel(details.name, channel)) {
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched but channel is not an authorized hashtag channel, ignoring");
+    return;
+  }
+
+  char bits[5];
+
+  if (is_write) {
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting relay %d to %d", (uint32_t)pin, (uint32_t)state);
+    bool did_act = actuator.setPin(pin, state);
+#ifdef ACTUATOR_SEND_ACK
+    if (did_act) {
+      buildRelayStateBits(actuator.getState(), bits);
+      char msg[32];
+      snprintf(msg, sizeof(msg), "PIN%u=%s STATE=b%s", (unsigned)pin, state ? "ON" : "OFF", bits);
+      sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+    }
+#else
+    (void)did_act;
+#endif
+  } else {   // is_status
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: status query matched");
+    buildRelayStateBits(actuator.getState(), bits);
+    char msg[24];
+    snprintf(msg, sizeof(msg), "STATE=b%s", bits);
+    sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+  }
+}
+#endif // HAS_GPIO_RELAY_ACTUATOR
+
 void MyMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh::Packet *pkt, uint32_t timestamp,
                                   const char *text) {
+#ifdef HAS_GPIO_RELAY_ACTUATOR
+  checkActuatorCommand(channel, text);
+#endif
+
   int i = 0;
   if (app_target_ver >= 3) {
     out_frame[i++] = RESP_CODE_CHANNEL_MSG_RECV_V3;
@@ -900,6 +970,10 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
 
 void MyMesh::begin(bool has_display) {
   BaseChatMesh::begin();
+
+#ifdef HAS_GPIO_RELAY_ACTUATOR
+  actuator.begin();
+#endif
 
   if (!_store->loadMainIdentity(self_id)) {
     self_id = radio_new_identity(); // create new random identity

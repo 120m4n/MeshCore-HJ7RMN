@@ -32,6 +32,9 @@
 #include <helpers/IdentityStore.h>
 #include <helpers/SimpleMeshTables.h>
 #include <helpers/StaticPoolPacketManager.h>
+#ifdef HAS_GPIO_RELAY_ACTUATOR
+#include <helpers/actuators/GPIORelayActuator.h>
+#endif
 #include <target.h>
 
 /* ---------------------------------- CONFIGURATION ------------------------------------- */
@@ -186,6 +189,10 @@ public:
   bool hasPendingWork() const;
 
 private:
+#ifdef HAS_GPIO_RELAY_ACTUATOR
+  GPIORelayActuator actuator;
+  void checkActuatorCommand(const mesh::GroupChannel& channel, const char* text);
+#endif
   void writeOKFrame();
   void writeErrFrame(uint8_t err_code);
   void writeDisabledFrame();
