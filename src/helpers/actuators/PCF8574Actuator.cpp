@@ -29,6 +29,18 @@ bool PCF8574Actuator::setPin(uint8_t pin, bool state) {
   return writeState();
 }
 
+bool PCF8574Actuator::resetAll() {
+  if (_wire == NULL) return false;
+
+  uint8_t prev_state = _out_state;
+  _out_state = 0x00;
+  if (!writeState()) {
+    _out_state = prev_state;   // write failed - don't claim the new state
+    return false;
+  }
+  return true;
+}
+
 bool PCF8574Actuator::readState(uint8_t* out, bool* drifted) {
   if (drifted != NULL) *drifted = false;
 

@@ -16,6 +16,9 @@
 #ifndef ACTUATOR_CMD_STATUS
 #define ACTUATOR_CMD_STATUS "PIN_STATUS"
 #endif
+#ifndef ACTUATOR_CMD_RESET
+#define ACTUATOR_CMD_RESET "PIN_RESET"
+#endif
 #endif
 
 #define CMD_APP_START                 1
@@ -620,7 +623,8 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
   bool state;
   bool is_write = parseActuatorCmd(text, &pin, &state);
   bool is_status = !is_write && textEndsWithCmd(text, ACTUATOR_CMD_STATUS);
-  if (!is_write && !is_status) {
+  bool is_reset = !is_write && !is_status && textEndsWithCmd(text, ACTUATOR_CMD_RESET);
+  if (!is_write && !is_status && !is_reset) {
     return;   // not an actuator command
   }
 
@@ -645,7 +649,7 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
       sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
     }
 #endif
-  } else {   // is_status
+  } else if (is_status) {
     MESH_DEBUG_PRINTLN("checkActuatorCommand: status query matched");
     did_act = true;
 
@@ -663,6 +667,19 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
       snprintf(msg, sizeof(msg), "STATE=b%s", bits);
     }
     sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+  } else {   // is_reset
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: reset matched, setting all pins OFF");
+    did_act = actuator.resetAll();
+    // always confirms on success, regardless of ACTUATOR_SEND_ACK - this
+    // is more consequential than a single PIN_ON/OFF (it clears every
+    // output at once), so the remote operator should always be able to
+    // verify it happened, even in builds without the ack flag.
+    if (did_act) {
+      buildStateBits(actuator.getState(), bits);
+      char msg[32];
+      snprintf(msg, sizeof(msg), "RESET STATE=b%s", bits);
+      sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+    }
   }
 
 #if defined(PIN_LED) && defined(MESH_DEBUG)
