@@ -22,6 +22,10 @@ class PCF8574Actuator {
 public:
   void begin(TwoWire& wire, uint8_t i2c_addr = PCF8574_I2C_ADDR);
   bool setPin(uint8_t pin, bool state);   // returns false on I2C error
+  // sets all 8 pins OFF in a single I2C write (atomic - not 8 sequential
+  // setPin() calls, which could leave a partial state on a mid-sequence
+  // bus error). Returns false on I2C error, leaving the cache untouched.
+  bool resetAll();
   uint8_t getState() const { return _out_state; }   // last-written byte, no I2C traffic
 
   // live I2C read of the chip's actual pin state. On success, resyncs the

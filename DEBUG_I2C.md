@@ -140,6 +140,18 @@ para simular que el chip perdió su estado por un corte de energía, y luego
 envía `PIN_STATUS`: la respuesta debería llegar como
 `STATE=b11111111 (resynced)` en vez del estado que tenía antes del `r`.
 
+Para probar el reset, enciende un par de pines (`PIN0_ON`, `PIN3_ON`) y
+luego envía `PIN_RESET` al mismo canal — tampoco requiere ningún flag. En
+la consola de debug deberías ver:
+
+```
+DEBUG: checkActuatorCommand: reset matched, setting all pins OFF
+```
+
+y en la app companion el mensaje `RESET STATE=b00000000` llega siempre
+(esta confirmación no depende de `ACTUATOR_SEND_ACK`, a diferencia del ack
+de `PIN<n>_ON/OFF`).
+
 ## Paso 6 — Confirmar la escritura I2C con el Nano de prueba
 
 En paralelo, abre el monitor serie del Nano (Arduino IDE Serial Monitor, o
@@ -159,6 +171,16 @@ I2C write: 0x00
 Prueba también con otro pin, ej. `PIN3_ON`, y confirma que solo cambia el
 bit correspondiente (`I2C write: 0x08`), sin afectar el estado de los
 demás pines.
+
+Con varios pines activos (ej. `PIN0_ON` + `PIN3_ON`, `I2C write: 0x09`),
+envía `PIN_RESET` y confirma que llega **una sola** escritura:
+
+```
+I2C write: 0x00
+```
+
+en vez de una escritura por pin — así se verifica que el reset es
+atómico (una transacción I2C), no una secuencia de `setPin()`.
 
 Esto confirma sin ambigüedad que el byte llegó por el bus físico SDA/SCL,
 independientemente de lo que se vea (o no) en la consola de debug de la

@@ -99,6 +99,25 @@ nodo:
   nodo a batería/panel solar ese costo debe ser una decisión explícita, no
   automática.
 
+- **Reset de todas las salidas (`PIN_RESET`)**: siempre disponible (no
+  requiere ningún flag), en cualquier canal hashtag autorizado. Envía la
+  palabra de comando `PIN_RESET` al canal (mismo mecanismo de sufijo que
+  el resto de comandos) y el nodo apaga los 8 pines **de una sola vez**
+  (una única escritura I2C, no 8 escrituras secuenciales — si el bus
+  falla, no queda un estado parcial). A diferencia del ack de escritura,
+  esta confirmación **siempre** se envía en éxito, sin depender de
+  `ACTUATOR_SEND_ACK`: apagar las 8 salidas de golpe es más consecuente
+  que un `PIN<n>_ON/OFF` individual, así que el operador remoto siempre
+  puede verificar que ocurrió, incluso en builds sin el flag de ack
+  activo:
+
+  ```
+  RESET STATE=b00000000
+  ```
+
+  Si la escritura I2C falla, no se envía confirmación (mismo criterio que
+  el ack de escritura) y el estado en caché no cambia.
+
 ### Formato de `STATE=b........`
 
 Los 8 caracteres tras `b` representan el estado de los 8 pines del
@@ -173,6 +192,7 @@ defecto si no se especifican:
 -D ACTUATOR_CMD_ON_SUFFIX='"_ON"'
 -D ACTUATOR_CMD_OFF_SUFFIX='"_OFF"'
 -D ACTUATOR_CMD_STATUS='"PIN_STATUS"'
+-D ACTUATOR_CMD_RESET='"PIN_RESET"'
 -D ACTUATOR_SEND_ACK=1
 ```
 
@@ -181,7 +201,9 @@ Por defecto (si no defines los tres primeros flags) son `"PIN"`, `"_ON"` y
 La comparación es **exacta y sensible a mayúsculas**, no se procesan
 parámetros adicionales, y un dígito fuera de `0`-`7` (ej. `PIN9_ON`) no
 coincide con ningún comando. `ACTUATOR_CMD_STATUS` (default `"PIN_STATUS"`)
-es la palabra de comando para la consulta de estado — ver
+es la palabra de comando para la consulta de estado, y
+`ACTUATOR_CMD_RESET` (default `"PIN_RESET"`) para el reset de todas las
+salidas — ver
 ["Consultar y confirmar el estado por radio"](#consultar-y-confirmar-el-estado-por-radio)
 más arriba.
 
