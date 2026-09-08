@@ -118,6 +118,45 @@ nodo:
   Si la escritura I2C falla, no se envía confirmación (mismo criterio que
   el ack de escritura) y el estado en caché no cambia.
 
+- **Encendido temporizado del pin 7 (`PIN7_ON_<N>M`)**: exclusivo del pin
+  7 — ningún otro pin admite temporizador. `<N>` debe ser uno de estos 8
+  valores (Fibonacci); cualquier otro número no coincide con ningún
+  comando y se ignora en silencio, igual que un dígito de pin fuera de
+  rango:
+
+  ```
+  PIN7_ON_1M   PIN7_ON_2M   PIN7_ON_3M   PIN7_ON_5M
+  PIN7_ON_8M   PIN7_ON_13M  PIN7_ON_21M  PIN7_ON_34M
+  ```
+
+  Al recibirlo, el pin 7 se enciende y, transcurridos `N` minutos, el
+  firmware lo apaga **automáticamente**, sin necesidad de un comando
+  `PIN7_OFF` posterior. Un nuevo `PIN7_ON_<N>M` mientras uno anterior
+  sigue pendiente **reemplaza** el temporizador (reinicia el conteo con
+  la nueva duración). Un `PIN7_OFF` manual, un `PIN7_ON` simple (sin
+  sufijo — queda encendido indefinidamente) o un `PIN_RESET` cancelan
+  cualquier temporizador pendiente.
+
+  El ack de encendido (opt-in, `ACTUATOR_SEND_ACK`) anota la duración:
+
+  ```
+  PIN7=ON STATE=b00000001 (auto-off 5m)
+  ```
+
+  El apagado automático al expirar, en cambio, **siempre** se confirma
+  al mismo canal que originó el comando — sin depender de
+  `ACTUATOR_SEND_ACK` — porque es un cambio de estado que nadie ordenó
+  en ese instante, y sin esta confirmación el operador remoto no tiene
+  forma de saberlo salvo consultando `PIN_STATUS`:
+
+  ```
+  PIN7=OFF STATE=b00000000 (timeout)
+  ```
+
+  Si el canal que originó el comando ya no existe cuando el temporizador
+  expira (editado o borrado mientras tanto), el pin igual se apaga pero
+  sin confirmación — no hay a quién responder.
+
 ### Formato de `STATE=b........`
 
 Los 8 caracteres tras `b` representan el estado de los 8 pines del
@@ -206,6 +245,12 @@ es la palabra de comando para la consulta de estado, y
 salidas — ver
 ["Consultar y confirmar el estado por radio"](#consultar-y-confirmar-el-estado-por-radio)
 más arriba.
+
+El comando de encendido temporizado del pin 7 (`PIN7_ON_<N>M`) reutiliza
+`ACTUATOR_CMD_PREFIX` y `ACTUATOR_CMD_ON_SUFFIX` (por eso el default es
+`PIN7_ON_1M`, etc.) pero **no tiene flag propio** — el pin (7) y la lista
+de duraciones válidas (1, 2, 3, 5, 8, 13, 21, 34 minutos) están fijos en
+el firmware, no son configurables por build flag.
 
 `ACTUATOR_SEND_ACK` es distinto a los demás: es un flag de **presencia**
 (no un string), y por defecto está **apagado** — sin él definido, el

@@ -264,6 +264,10 @@ private:
 #ifdef HAS_PCF8574_ACTUATOR
   PCF8574Actuator actuator;
   void checkActuatorCommand(const mesh::GroupChannel& channel, const char* text);
+  // pending auto-off timer for pin 7 (PIN7_ON_<N>M), 0 = none pending.
+  // pin7_channel_idx remembers which channel to confirm on when it fires.
+  unsigned long pin7_off_expiry = 0;
+  int pin7_channel_idx = -1;
 #endif
 };
 

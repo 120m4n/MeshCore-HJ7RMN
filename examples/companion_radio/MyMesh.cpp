@@ -618,13 +618,34 @@ static void buildStateBits(uint8_t state, char out[9]) {
   out[PCF8574_MAX_PIN + 1] = 0;
 }
 
+// valid PIN7_ON_<N>M auto-off durations, in minutes (Fibonacci) - pin 7
+// only, no other pin supports a timeout.
+static const uint8_t PIN7_TIMEOUT_MINUTES[] = { 1, 2, 3, 5, 8, 13, 21, 34 };
+#define PIN7_TIMEOUT_COUNT (sizeof(PIN7_TIMEOUT_MINUTES) / sizeof(PIN7_TIMEOUT_MINUTES[0]))
+
+// matches "PIN7_ON_<N>M" as a suffix, for N in PIN7_TIMEOUT_MINUTES only -
+// any other duration (e.g. PIN7_ON_4M) is not a recognized command.
+static bool parsePin7TimeoutCmd(const char* text, uint8_t* minutes) {
+  for (uint8_t i = 0; i < PIN7_TIMEOUT_COUNT; i++) {
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "%s7%s_%uM", ACTUATOR_CMD_PREFIX, ACTUATOR_CMD_ON_SUFFIX, (unsigned)PIN7_TIMEOUT_MINUTES[i]);
+    if (textEndsWithCmd(text, cmd)) {
+      *minutes = PIN7_TIMEOUT_MINUTES[i];
+      return true;
+    }
+  }
+  return false;
+}
+
 void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char* text) {
   uint8_t pin;
   bool state;
+  uint8_t pin7_minutes;
   bool is_write = parseActuatorCmd(text, &pin, &state);
   bool is_status = !is_write && textEndsWithCmd(text, ACTUATOR_CMD_STATUS);
   bool is_reset = !is_write && !is_status && textEndsWithCmd(text, ACTUATOR_CMD_RESET);
-  if (!is_write && !is_status && !is_reset) {
+  bool is_pin7_timeout = !is_write && !is_status && !is_reset && parsePin7TimeoutCmd(text, &pin7_minutes);
+  if (!is_write && !is_status && !is_reset && !is_pin7_timeout) {
     return;   // not an actuator command
   }
 
@@ -641,6 +662,11 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
   if (is_write) {
     MESH_DEBUG_PRINTLN("checkActuatorCommand: keyword matched, setting pin %d to %d", (uint32_t)pin, (uint32_t)state);
     did_act = actuator.setPin(pin, state);
+    if (did_act && pin == 7) {
+      // a direct PIN7_ON (indefinite) or PIN7_OFF always overrides any
+      // pending auto-off timer from a prior PIN7_ON_<N>M.
+      pin7_off_expiry = 0;
+    }
 #ifdef ACTUATOR_SEND_ACK
     if (did_act) {
       buildStateBits(actuator.getState(), bits);
@@ -667,7 +693,7 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
       snprintf(msg, sizeof(msg), "STATE=b%s", bits);
     }
     sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
-  } else {   // is_reset
+  } else if (is_reset) {
     MESH_DEBUG_PRINTLN("checkActuatorCommand: reset matched, setting all pins OFF");
     did_act = actuator.resetAll();
     // always confirms on success, regardless of ACTUATOR_SEND_ACK - this
@@ -675,10 +701,25 @@ void MyMesh::checkActuatorCommand(const mesh::GroupChannel& channel, const char*
     // output at once), so the remote operator should always be able to
     // verify it happened, even in builds without the ack flag.
     if (did_act) {
+      pin7_off_expiry = 0;   // pin 7 is already off, any pending timer is stale
       buildStateBits(actuator.getState(), bits);
       char msg[32];
       snprintf(msg, sizeof(msg), "RESET STATE=b%s", bits);
       sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+    }
+  } else {   // is_pin7_timeout
+    MESH_DEBUG_PRINTLN("checkActuatorCommand: pin7 timeout matched, ON for %u min", (unsigned)pin7_minutes);
+    did_act = actuator.setPin(7, true);
+    if (did_act) {
+      // always replaces any previously pending timer - the latest command wins.
+      pin7_off_expiry = futureMillis((int)pin7_minutes * 60000);
+      pin7_channel_idx = idx;
+#ifdef ACTUATOR_SEND_ACK
+      buildStateBits(actuator.getState(), bits);
+      char msg[48];
+      snprintf(msg, sizeof(msg), "PIN7=ON STATE=b%s (auto-off %um)", bits, (unsigned)pin7_minutes);
+      sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+#endif
     }
   }
 
@@ -2447,6 +2488,28 @@ void MyMesh::loop() {
     saveContacts();
     dirty_contacts_expiry = 0;
   }
+
+#ifdef HAS_PCF8574_ACTUATOR
+  // pin7 auto-off timer (from PIN7_ON_<N>M) expired?
+  if (pin7_off_expiry && millisHasNowPassed(pin7_off_expiry)) {
+    pin7_off_expiry = 0;
+    if (actuator.setPin(7, false)) {
+      MESH_DEBUG_PRINTLN("MyMesh::loop: pin7 auto-off timer expired, pin set OFF");
+      // always confirms, same rationale as PIN_RESET's ack - this state
+      // change wasn't triggered by any command arriving right now, so
+      // without it a remote operator has no way to know it happened short
+      // of polling PIN_STATUS.
+      ChannelDetails details;
+      if (pin7_channel_idx >= 0 && getChannel(pin7_channel_idx, details)) {
+        char bits[9];
+        buildStateBits(actuator.getState(), bits);
+        char msg[40];
+        snprintf(msg, sizeof(msg), "PIN7=OFF STATE=b%s (timeout)", bits);
+        sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), details.channel, _prefs.node_name, msg, strlen(msg));
+      }
+    }
+  }
+#endif
 
 #ifdef DISPLAY_CLASS
   if (_ui) _ui->setHasConnection(_serial->isConnected());

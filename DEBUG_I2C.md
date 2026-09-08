@@ -152,6 +152,37 @@ y en la app companion el mensaje `RESET STATE=b00000000` llega siempre
 (esta confirmación no depende de `ACTUATOR_SEND_ACK`, a diferencia del ack
 de `PIN<n>_ON/OFF`).
 
+Para probar el temporizador del pin 7, envía `PIN7_ON_1M` al mismo canal
+(usa `1M` para no esperar de más durante la prueba). En la consola de
+debug deberías ver de inmediato:
+
+```
+DEBUG: checkActuatorCommand: pin7 timeout matched, ON for 1 min
+```
+
+y, si compilaste con `-D ACTUATOR_SEND_ACK=1`, el ack
+`PIN7=ON STATE=b........ (auto-off 1m)` en la app companion. Al cabo de
+~1 minuto, sin enviar ningún comando adicional, debería llegar:
+
+```
+DEBUG: MyMesh::loop: pin7 auto-off timer expired, pin set OFF
+```
+
+y el mensaje `PIN7=OFF STATE=b........ (timeout)` al canal — este último
+**siempre** llega, sin depender de `ACTUATOR_SEND_ACK`. Prueba también:
+
+- Enviar `PIN7_ON_2M` y, antes de que expire, `PIN7_ON_1M` — confirma que
+  el apagado ocurre ~1 minuto después del *segundo* comando, no 2 minutos
+  después del primero (el temporizador se reemplaza, no se acumula).
+- Enviar `PIN7_ON_1M` y, antes de que expire, `PIN7_OFF` — confirma que
+  el pin se apaga de inmediato y que no llega ningún mensaje de timeout
+  más tarde.
+- Enviar `PIN7_ON_1M` y, antes de que expire, `PIN7_ON` (sin sufijo) —
+  confirma que el pin queda encendido indefinidamente, sin apagado
+  automático posterior.
+- Enviar `PIN7_ON_4M` (duración fuera de la lista válida) — confirma que
+  no hay ninguna reacción, ni en consola ni en el canal.
+
 ## Paso 6 — Confirmar la escritura I2C con el Nano de prueba
 
 En paralelo, abre el monitor serie del Nano (Arduino IDE Serial Monitor, o
