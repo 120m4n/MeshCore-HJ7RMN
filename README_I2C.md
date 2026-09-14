@@ -296,14 +296,68 @@ Conecta el PCF8574 así:
 - Cualquiera de los 8 pines de salida del PCF8574 (0-7, según el comando
   recibido) al actuador externo correspondiente (relé, driver, etc.)
 
+## d) Compilar y flashear el firmware
+
+Para generar el firmware con este soporte de actuador I2C, usa `build.sh`
+desde la raíz del repo:
+
+```bash
+export FIRMWARE_VERSION=v1.2.0
+sh build.sh build-firmware Xiao_nrf52_companion_radio_ble
+```
+
+(sustituye `Xiao_nrf52_companion_radio_ble` por
+`Xiao_nrf52_companion_radio_usb` si vas a usar el transporte USB en vez de
+BLE — ver ["a) Configurar el canal"](#a-configurar-el-canal) más arriba y
+`DEPLOY_I2C.md` para la diferencia entre ambos).
+
+`FIRMWARE_VERSION` es **obligatorio**: si no está definido en el entorno,
+`build.sh` falla de inmediato con:
+
+```
+FIRMWARE_VERSION must be set in environment
+```
+
+No hace falta que sea un número de versión "real" — cualquier string sirve
+(`v1.0.0`, `dev`, `local-test`, etc.); se usa para nombrar los artefactos
+de salida junto con el hash corto del commit actual. Los artefactos
+quedan en `out/`:
+
+```
+out/Xiao_nrf52_companion_radio_ble-<version>-<commit>.uf2   # bootloader UF2 (drag-and-drop)
+out/Xiao_nrf52_companion_radio_ble-<version>-<commit>.bin   # binario crudo
+out/Xiao_nrf52_companion_radio_ble-<version>-<commit>.zip   # paquete Secure DFU (para meshcore.io/flasher)
+```
+
+Internamente, para este target (plataforma nRF52), `build.sh` corre
+`pio run -e Xiao_nrf52_companion_radio_ble` y luego convierte el `.hex`
+resultante a `.uf2` con `bin/uf2conv/uf2conv.py -f 0xADA52840` (family ID
+de Adafruit nRF52840) — el mismo script y family ID que usa el flasheo
+manual documentado en `DEPLOY_I2C.md`.
+
+Para compilar sin flags de depuración (`MESH_DEBUG`, etc.), agrega
+`DISABLE_DEBUG=1`:
+
+```bash
+export FIRMWARE_VERSION=v1.0.0
+export DISABLE_DEBUG=1
+sh build.sh build-firmware Xiao_nrf52_companion_radio_ble
+```
+
+Ver `DEPLOY_I2C.md` para las dos formas de flashear el `.uf2`/`.zip`
+resultante a la placa (UF2 manual o meshcore.io/flasher).
+
 ## Comportamiento del pin
 
 El comando es tipo **toggle**: `PIN<n>_ON` deja el pin `<n>` activo de
 forma indefinida hasta recibir `PIN<n>_OFF`; no hay apagado automático por
-tiempo. Cada pin se controla de forma independiente — activar uno no
-afecta el estado de los demás. Si necesitas un pulso momentáneo en vez de
-un toggle persistente, modifica `MyMesh::checkActuatorCommand()` en
-`examples/companion_radio/MyMesh.cpp`.
+tiempo — **excepto el pin 7**, que además admite `PIN7_ON_<N>M` para un
+apagado automático temporizado (ver
+["Consultar y confirmar el estado por radio"](#consultar-y-confirmar-el-estado-por-radio)
+más arriba). Cada pin se controla de forma independiente — activar uno no
+afecta el estado de los demás. Si necesitas un pulso momentáneo en otro
+pin en vez de un toggle persistente, modifica
+`MyMesh::checkActuatorCommand()` en `examples/companion_radio/MyMesh.cpp`.
 
 ## Ver también
 
