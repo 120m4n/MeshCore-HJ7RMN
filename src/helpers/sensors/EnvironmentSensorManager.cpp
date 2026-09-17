@@ -220,6 +220,7 @@ static RAK12500LocationProvider RAK12500_provider;
 static void scanI2CBus(TwoWire* wire, bool found[128]) {
   for (uint8_t addr = 0x08; addr < 0x78; addr++) {
     wire->beginTransmission(addr);
+    delay(2); // bus-idle gap before the next START; some devices (e.g. INA3221) NAK if probed back-to-back
     found[addr] = (wire->endTransmission() == 0);
   }
 }
