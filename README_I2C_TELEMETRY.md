@@ -72,6 +72,17 @@ integrado en `companion_radio`.
   contactos marcados; `0` = nunca a peticiones remotas (pero la app
   local del propio dueño siempre ve todo, sin importar este valor).
 
+  > **`set tel_env`/`tel_base`/`tel_loc` solo existe en firmwares
+  > `companion_radio`** (`Xiao_nrf52_companion_radio_usb_i2c_sensors`,
+  > `_ble_i2c_sensors`) — son prefs de `NodePrefs`
+  > (`examples/companion_radio/NodePrefs.h:24-26,139-141`), no del
+  > framework de sensores en sí. En `Xiao_nrf52_repeater`,
+  > `_room_server` o `_sensor` ese comando no existe y responde
+  > `unknown config: tel_env 2` — esos firmwares no tienen la prefs
+  > `NodePrefs`; el que pide la telemetría decide qué categorías
+  > quiere, recortadas solo si su rol ACL es `GUEST`
+  > (`examples/simple_repeater/MyMesh.cpp:239-248`).
+
 ## Por qué una variante separada
 
 `ENV_INCLUDE_BME280=1` (y el resto del set `ENV_INCLUDE_*`) ya viene
@@ -82,6 +93,14 @@ build limpio, dedicado solo a sensores I2C nativos, sin el actuador
 PCF8574 (`HAS_PCF8574_ACTUATOR`) — evita mezclar el modelo de "comando
 de canal" (ver `README_I2C.md`) con el de telemetría formal en el mismo
 build.
+
+Validado también en hardware sobre `Xiao_nrf52_repeater`: mismo BME280
+en `0x76`, detectado e inicializado correctamente en el arranque (log
+`MESH_DEBUG`), sin ningún cambio de build. El repeater (y
+`_room_server`, `_sensor`) no necesitan una variante `_i2c_sensors`
+propia porque nunca incluyen el actuador PCF8574, así que no hay nada
+que "limpiar" (nota sobre permisos de `tel_env` en ese firmware: ver
+recuadro en la sección anterior).
 
 ## Conexión física (BME280)
 
