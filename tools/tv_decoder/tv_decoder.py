@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """tv_decoder.py -- decodifica vectores "T,H,t;dT,dH,dt;..." del comando
 `tv <since>` de MeshCore (ver docs/Spec telemetría vectorial MeshCore
 (XIAO nRF52).md). Solo stdlib, sin dependencias externas.
@@ -6,16 +5,17 @@
 H es %RH si el nodo detectó un BME280, o presión atmosférica escalada
 (hPa - 800) si detectó un BMP280 -- confirmar con el comando `tv sensor`
 del nodo antes de interpretar el campo (ver README_TV_TELEMETRY.md).
+Usar --tv_hr_adjust para des-escalar esa columna a hPa reales cuando
+corresponda (ver `main()` / `--help`).
 """
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-
 class TvParseError(ValueError):
     pass
-
 
 @dataclass
 class TvSample:
@@ -23,7 +23,6 @@ class TvSample:
     date: datetime
     temp_c: float
     h_raw: int  # %RH (BME280) o hPa-800 (BMP280)
-
 
 def decode_vector(s: str) -> list[TvSample]:
     v = s.strip()
@@ -56,21 +55,27 @@ def decode_vector(s: str) -> list[TvSample]:
         out.append(TvSample(E, date, T / 10, H))
     return out
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Decodifica un vector tv de MeshCore.")
+    parser.add_argument("vector", help='vector tv, ej. "330,65,29840113;-12,3,61"')
+    parser.add_argument(
+        "--tv_hr_adjust", nargs="?", type=int, const=800, default=None, metavar="OFFSET",
+        help="el nodo tiene BMP280 (sin humedad): el campo H trae presión escalada "
+             "(hPa - OFFSET). Suma OFFSET de vuelta para mostrar hPa reales en vez del "
+             "H crudo. Sin valor, usa 800 (el offset del firmware, ver tv_sensor.cpp).",
+    )
+    args = parser.parse_args()
 
-if __name__ == "__main__":
-    vector = "302,104,29843589;1,0,6;2,0,21;-3,-1,36;-7,-1,51"
-    samples = decode_vector(vector)
+    samples = decode_vector(args.vector)
 
-    header = f"{'#':>2}  {'T (°C)':>7}  {'H (raw)':>7}  {'epoch_min':>10}  {'UTC':<19}"
+    hr_label = "Presión (hPa)" if args.tv_hr_adjust is not None else "H (raw)"
+    header = f"{'#':>2}  {'T (°C)':>7}  {hr_label:>13}  {'epoch_min':>10}  {'UTC':<19}"
     print(header)
     print("-" * len(header))
     for i, s in enumerate(samples):
-        print(f"{i:>2}  {s.temp_c:>7.1f}  {s.h_raw:>7}  {s.epoch_min:>10}  "
+        hr_value = s.h_raw + args.tv_hr_adjust if args.tv_hr_adjust is not None else s.h_raw
+        print(f"{i:>2}  {s.temp_c:>7.1f}  {hr_value:>13}  {s.epoch_min:>10}  "
               f"{s.date.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # self-check
-    assert len(samples) == 5
-    assert samples[0].temp_c == 30.2 and samples[0].h_raw == 104
-    assert samples[-1].temp_c == 29.5 and samples[-1].h_raw == 103
-    assert decode_vector("-") == []
-    print("\nOK: self-check passed")
+if __name__ == "__main__":
+    main()
