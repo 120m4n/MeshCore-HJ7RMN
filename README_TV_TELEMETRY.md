@@ -110,6 +110,45 @@ extra ya las sobrescribió.
 El muestreo arranca con el reloj interno de la XIAO esté o no sincronizado
 con `clock sync` — no depende de eso (ver spec, sección "Desviaciones").
 
+Para calcular un `epoch_min` para pruebas manuales sin depender de parsear
+el texto de `clock` (frágil: no tiene cero-padding), usá el reloj de tu
+propia máquina — es la misma base de tiempo con la que sincronizás el nodo:
+
+```sh
+echo $(( $(date -u +%s) / 60 ))
+```
+
+## Comportamiento conocido: `clock sync` invalida el historial previo
+
+Un `clock sync` **válido** (`sender_timestamp > curr`, el reloj salta hacia
+adelante) descarta de hecho todo lo muestreado antes del salto — no porque
+el ring se borre, sino porque `valid()` exige `now_min - epoch_min < 1440`
+(24 h), y un salto grande (típico: del default de `VolatileRTCClock`, 15
+mayo 2024, al real de hoy) hace que esa resta sea enorme para *todos* los
+registros pre-sync de una sola vez.
+
+Paso a paso:
+
+1. Antes de sincronizar, el reloj interno arranca en un valor fijo por
+   defecto (15 may 2024). Como el muestreo **no depende de `clock_ok`**
+   (ver más arriba), `sample_tick()` ya viene grabando con ese epoch
+   "falso" desde el boot.
+2. `clock sync <timestamp>` salta el reloj de golpe (`VolatileRTCClock` no
+   interpola, reemplaza `base_time` directo).
+3. Los bytes del ring **no se tocan** por el sync — pero todos los
+   registros pre-sync fallan `valid()` contra el nuevo `now_min`.
+   `tv 0` responde `-` justo después del salto, aunque el ring tenga bytes
+   escritos.
+4. Se recupera solo, casi al instante: el contador de "bucket" de
+   `sample_tick()` es independiente del RTC, así que el primer `loop()`
+   después del sync ve un bucket distinto al de antes y dispara una
+   muestra nueva de inmediato, con el epoch ya sincronizado como anchor.
+
+**Implicación práctica:** sincronizá el reloj (`clock sync`) apenas
+bootea el nodo, antes de que el backend empiece a confiar en el
+historial de `tv` — cualquier dato juntado antes de ese sync queda
+inalcanzable en cuanto el sync se aplica.
+
 ## Compilar y flashear
 
 ```sh
