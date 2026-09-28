@@ -1288,6 +1288,8 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       strcpy(reply, "OK - Discover sent");
     }
 #ifdef WITH_TV_TELEMETRY
+  } else if (strcmp(command, "tv sensor") == 0) {
+    strcpy(reply, tv::sensor_kind());
   } else if (memcmp(command, "tv ", 3) == 0) {
     tv::handle_tv(command + 3, getRTCClock()->getCurrentTime() / 60, reply, TV_REPLY_CAP);
 #endif
