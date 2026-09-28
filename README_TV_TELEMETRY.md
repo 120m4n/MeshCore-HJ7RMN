@@ -161,12 +161,11 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
   completa: formato del vector, decisiones de diseño, decoder TypeScript
   de referencia.
 - `tools/tv_decoder/tv_decoder.py` y `tools/tv_decoder/tv_decoder.ts` —
-  decoders standalone (sin dependencias externas) para el backend. El de
-  Python es también un CLI: `python3 tv_decoder.py "<vector>"`, y con
-  `--tv_hr_adjust` (default 800, el mismo offset que usa `tv_sensor.cpp`)
-  des-escala la columna `H` a hPa reales cuando el nodo tiene BMP280 en
-  vez de BME280. El de TS trae un self-check ejecutable (`node
-  tv_decoder.ts`).
+  decoders standalone (sin dependencias externas) para el backend, ambos
+  con el mismo CLI: `python3 tv_decoder.py "<vector>"` / `node
+  tv_decoder.ts "<vector>"`. Con `--tv_hr_adjust` (default 800, el mismo
+  offset que usa `tv_sensor.cpp`) des-escalan la columna `H` a hPa reales
+  cuando el nodo tiene BMP280 en vez de BME280.
 - `README_I2C_TELEMETRY.md` — telemetría formal (`GetTelemetry`,
   CayenneLPP) para firmwares `companion_radio`; mecanismo distinto, no
   relacionado con `tv`.
