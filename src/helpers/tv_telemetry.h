@@ -39,6 +39,7 @@ inline bool valid(const Rec& r, uint32_t now_min) {
 bool sensor_ready();
 int16_t read_temp_dC();
 uint8_t read_hum_pct();
+const char* sensor_kind();  // "BME280" / "BMP280" / "none" -- diagnóstico, comando "tv sensor"
 
 // Llamar desde loop(). No muestrea si no hay sensor soportado detectado.
 inline void sample_tick(uint32_t now_min) {

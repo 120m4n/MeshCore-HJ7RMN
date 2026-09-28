@@ -51,6 +51,15 @@ uint8_t read_hum_pct() {
   return (uint8_t)lroundf(h);
 }
 
+const char* sensor_kind() {
+  if (!probed) probe();
+  switch (detected) {
+    case Kind::BME280: return "BME280";
+    case Kind::BMP280: return "BMP280";
+    default: return "none";
+  }
+}
+
 }  // namespace tv
 
 #endif // WITH_TV_TELEMETRY
