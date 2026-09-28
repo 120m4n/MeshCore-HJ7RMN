@@ -1,6 +1,14 @@
 #include "MyMesh.h"
 #include <algorithm>
 
+#ifdef WITH_TV_TELEMETRY
+#include <helpers/tv_telemetry.h>
+// MyMesh::onPeerDataRecv() replies into `uint8_t temp[166]; reply = &temp[5]`,
+// i.e. a real cap of 161 bytes (NUL included). Leave margin for the optional
+// 3-byte companion-radio CLI prefix reflection in handleCommand() below.
+#define TV_REPLY_CAP 150
+#endif
+
 /* ------------------------------ Config -------------------------------- */
 
 #ifndef LORA_FREQ
@@ -1279,12 +1287,19 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+#ifdef WITH_TV_TELEMETRY
+  } else if (memcmp(command, "tv ", 3) == 0) {
+    tv::handle_tv(command + 3, getRTCClock()->getCurrentTime() / 60, reply, TV_REPLY_CAP);
+#endif
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
 }
 
 void MyMesh::loop() {
+#ifdef WITH_TV_TELEMETRY
+  tv::sample_tick(getRTCClock()->getCurrentTime() / 60);
+#endif
 #ifdef WITH_BRIDGE
   bridge.loop();
 #endif
