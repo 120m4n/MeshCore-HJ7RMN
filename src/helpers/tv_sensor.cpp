@@ -41,14 +41,25 @@ int16_t read_temp_dC() {
 }
 
 uint8_t read_hum_pct() {
-  // ponytail: BMP280 no mide humedad; en ese caso se reporta 0 fijo.
-  // Upgrade: si hace falta H real con solo BMP280 en el bus, hay que sumar
+  if (detected == Kind::BME280) {
+    float h = bme.readHumidity();
+    if (h < 0) h = 0;
+    if (h > 100) h = 100;
+    return (uint8_t)lroundf(h);
+  }
+  // ponytail: BMP280 no mide humedad. En vez de mandar un "0%RH" inventado
+  // (que se lee como un dato real y no lo es), este campo pasa a llevar
+  // presión atmosférica escalada: (hPa - 800), saturado a [0,255] ->
+  // cubre 800-1055 hPa (nivel del mar normal + variación de clima).
+  // El consumidor debe llamar "tv sensor" para saber si este campo es
+  // %RH o presión -- el formato del vector no lleva esa distinción.
+  // Upgrade: si hace falta %RH real con un BMP280 en el bus, hay que sumar
   // un sensor de humedad separado -- fuera del alcance de este spec.
-  if (detected != Kind::BME280) return 0;
-  float h = bme.readHumidity();
-  if (h < 0) h = 0;
-  if (h > 100) h = 100;
-  return (uint8_t)lroundf(h);
+  float hpa = bmp.readPressure() / 100.0f;  // Pa -> hPa
+  float scaled = hpa - 800.0f;
+  if (scaled < 0) scaled = 0;
+  if (scaled > 255) scaled = 255;
+  return (uint8_t)lroundf(scaled);
 }
 
 const char* sensor_kind() {
