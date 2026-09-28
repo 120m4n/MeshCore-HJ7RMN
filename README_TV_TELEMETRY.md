@@ -160,6 +160,10 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
 - `docs/Spec telemetría vectorial MeshCore (XIAO nRF52).md` — spec
   completa: formato del vector, decisiones de diseño, decoder TypeScript
   de referencia.
+- `tools/tv_decoder/tv_decoder.py` y `tools/tv_decoder/tv_decoder.ts` —
+  decoders standalone (sin dependencias externas) para el backend, cada
+  uno con un self-check ejecutable (`python3 tv_decoder.py` / `node
+  tv_decoder.ts`).
 - `README_I2C_TELEMETRY.md` — telemetría formal (`GetTelemetry`,
   CayenneLPP) para firmwares `companion_radio`; mecanismo distinto, no
   relacionado con `tv`.
