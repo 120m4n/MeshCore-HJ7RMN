@@ -6,6 +6,10 @@
 //  - sample_tick() solo escribe si tv::sensor_ready() (ver tv_sensor.h) devuelve
 //    true; esa función cachea el resultado de detectar BME280/BMP280 una sola
 //    vez al boot y nunca reintenta si no se encontró nada.
+//  - El campo `H` del vector es %RH solo con BME280. Con BMP280 (que no mide
+//    humedad) lleva presión atmosférica escalada en su lugar -- ver el
+//    comentario de read_hum_pct() en tv_sensor.cpp. Usar "tv sensor" para
+//    saber cuál de los dos aplica antes de interpretar el campo.
 #pragma once
 #include <stdint.h>
 #include <stdio.h>
