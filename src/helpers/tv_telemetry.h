@@ -1,4 +1,4 @@
-// src/helpers/tv_telemetry.h — ring de 24 h + encoder de vectores "T,H,t;dT,dH,dt;..."
+// src/helpers/tv_telemetry.h — ring de 24 h + encoder de vectores compactos (formato v1)
 //
 // Desviaciones respecto al doc de spec original (pedidas explícitamente):
 //  - sample_tick() NO recibe/chequea clock_ok: se muestrea con el reloj interno
@@ -8,8 +8,9 @@
 //    vez al boot y nunca reintenta si no se encontró nada.
 //  - El campo `H` del vector es %RH solo con BME280. Con BMP280 (que no mide
 //    humedad) lleva presión atmosférica escalada en su lugar -- ver el
-//    comentario de read_hum_pct() en tv_sensor.cpp. Usar "tv sensor" para
-//    saber cuál de los dos aplica antes de interpretar el campo.
+//    comentario de read_hum_pct() en tv_sensor.cpp. El header del vector
+//    trae cuál de los dos aplica.
+//  - Formato v1 compacto en base64url (ver encode()), no el "T,H,t;..." del spec.
 #pragma once
 #include <stdint.h>
 #include <stdio.h>
@@ -18,8 +19,8 @@
 
 namespace tv {
 
-constexpr uint32_t INTERVAL_MIN = 15;
-constexpr uint32_t SLOTS = 1440 / INTERVAL_MIN;  // 96
+constexpr uint32_t INTERVAL_MIN = 30;
+constexpr uint32_t SLOTS = 1440 / INTERVAL_MIN;  // 48
 
 struct Rec {
   uint32_t epoch_min;  // 0 = slot vacío
@@ -44,6 +45,7 @@ bool sensor_ready();
 int16_t read_temp_dC();
 uint8_t read_hum_pct();
 const char* sensor_kind();  // "BME280" / "BMP280" / "none" -- diagnóstico, comando "tv sensor"
+uint8_t sensor_kind_id();   // 0 none, 1 BME280, 2 BMP280 -- va en el header del vector
 
 // Llamar desde loop(). No muestrea si no hay sensor soportado detectado.
 inline void sample_tick(uint32_t now_min) {
@@ -55,40 +57,79 @@ inline void sample_tick(uint32_t now_min) {
   put(now_min, read_temp_dC(), read_hum_pct());
 }
 
-// Escribe en `out` (terminado en NUL) los registros con epoch_min > since,
+// Formato v1 (base64url, 6 bits por char, sin separadores):
+//   V NN EEEEE TT HH  |  dT dH  |  .k  |  ~TTHH
+//   V     = (versión 1 << 2) | sensor_kind_id()  -> 'F' BME280, 'G' BMP280
+//   NN    = cantidad de registros (detecta truncamiento)
+//   EEEEE = epoch_min exacto del anchor; TT = zigzag(T décimas); HH = H
+//   dT dH = 1 char zigzag c/u (-32..31), delta vs registro ANTERIOR, slot siguiente
+//   .k    = saltar k slots vacíos (1..63; se repite si el hueco es mayor)
+//   ~TTHH = registro con T/H absolutos (el delta no entraba en 1 char)
+// El tiempo de cada registro después del anchor es implícito: inicio de su
+// bucket de 30 min. Por eso `since` se compara por bucket, no por minuto: el
+// backend puede mandar el epoch decodificado del último registro tal cual.
+constexpr char B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+constexpr uint8_t FORMAT_VERSION = 1;
+
+inline uint32_t zigzag(int32_t v) { return v >= 0 ? (uint32_t)v << 1 : ((uint32_t)(-v) << 1) - 1; }
+
+inline size_t put64(char* p, uint32_t v, int nchars) {
+  for (int i = 0; i < nchars; i++) p[i] = B64[(v >> (6 * (nchars - 1 - i))) & 63];
+  return (size_t)nchars;
+}
+
+// Escribe en `out` (terminado en NUL) los registros con bucket > bucket(since),
 // del más viejo al más nuevo, sin partir ningún registro. `cap` incluye el NUL
 // y debe ser >= 32. Sin datos nuevos escribe "-". Devuelve el largo escrito.
 inline size_t encode(uint32_t now_min, uint32_t since, char* out, size_t cap) {
   if (cap < 32) return 0;
+  const uint32_t since_b = since / INTERVAL_MIN;
   size_t n = 0;
-  bool first = true;
-  int16_t t0 = 0;
-  uint8_t h0 = 0;
-  uint32_t e0 = 0;
+  uint32_t count = 0, pb = 0;
+  int16_t pt = 0;
+  uint8_t ph = 0;
   const uint32_t start = (now_min / INTERVAL_MIN + 1) % SLOTS;  // slot más viejo
 
   for (uint32_t i = 0; i < SLOTS; i++) {
     const Rec& r = ring[(start + i) % SLOTS];
-    if (!valid(r, now_min) || r.epoch_min <= since) continue;
+    const uint32_t b = r.epoch_min / INTERVAL_MIN;
+    if (!valid(r, now_min) || b <= since_b || (count && b <= pb)) continue;
 
-    char buf[32];
-    int len;
-    if (first) {
-      len = snprintf(buf, sizeof buf, "%d,%u,%lu",
-                     (int)r.t, (unsigned)r.h, (unsigned long)r.epoch_min);
+    char buf[16];
+    size_t len = 0;
+    if (count == 0) {
+      buf[len++] = B64[(FORMAT_VERSION << 2) | sensor_kind_id()];
+      len += 2;  // NN: se completa al final
+      len += put64(buf + len, r.epoch_min, 5);
+      len += put64(buf + len, zigzag(r.t), 2);
+      len += put64(buf + len, r.h, 2);
     } else {
-      len = snprintf(buf, sizeof buf, ";%d,%d,%lu",
-                     (int)r.t - (int)t0, (int)r.h - (int)h0,
-                     (unsigned long)(r.epoch_min - e0));
+      for (uint32_t gap = b - pb - 1; gap;) {
+        uint32_t k = gap > 63 ? 63 : gap;
+        buf[len++] = '.';
+        buf[len++] = B64[k];
+        gap -= k;
+      }
+      const int dt = r.t - pt, dh = r.h - ph;
+      if (dt < -32 || dt > 31 || dh < -32 || dh > 31) {
+        buf[len++] = '~';
+        len += put64(buf + len, zigzag(r.t), 2);
+        len += put64(buf + len, r.h, 2);
+      } else {
+        buf[len++] = B64[zigzag(dt)];
+        buf[len++] = B64[zigzag(dh)];
+      }
     }
-    if (len <= 0 || n + (size_t)len >= cap) break;  // no cabe: el resto va en la próxima consulta
+    if (n + len >= cap) break;  // no cabe: el resto va en la próxima consulta
 
-    memcpy(out + n, buf, (size_t)len);
-    n += (size_t)len;
-    if (first) { t0 = r.t; h0 = r.h; e0 = r.epoch_min; first = false; }
+    memcpy(out + n, buf, len);
+    n += len;
+    count++;
+    pb = b; pt = r.t; ph = r.h;
   }
 
-  if (first) { out[0] = '-'; out[1] = '\0'; return 1; }
+  if (!count) { out[0] = '-'; out[1] = '\0'; return 1; }
+  put64(out + 1, count, 2);
   out[n] = '\0';
   return n;
 }

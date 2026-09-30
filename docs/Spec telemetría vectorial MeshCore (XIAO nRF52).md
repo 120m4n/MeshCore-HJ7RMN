@@ -1,5 +1,12 @@
 # Spec: telemetría vectorial MeshCore (XIAO nRF52)
 
+> **Nota:** el formato de vector descrito acá (`T,H,t;dT,dH,dt;...`, "v0") y
+> el encoder/decoder embebidos fueron reemplazados por el formato compacto
+> v1 (base64url), y el intervalo de muestreo pasó de 15 a 30 min (48 slots)
+> para que las 24 h entren en una sola consulta. Ver `README_TV_TELEMETRY.md`
+> y `src/helpers/tv_telemetry.h`. El formato v0 queda en el tag git `tv-v0`.
+> El resto del documento (ring, flujo del backend) sigue vigente.
+
 Sep 28, 2026 · @roman
 
 ## Resumen

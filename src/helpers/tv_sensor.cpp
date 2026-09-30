@@ -51,8 +51,8 @@ uint8_t read_hum_pct() {
   // (que se lee como un dato real y no lo es), este campo pasa a llevar
   // presión atmosférica escalada: (hPa - 800), saturado a [0,255] ->
   // cubre 800-1055 hPa (nivel del mar normal + variación de clima).
-  // El consumidor debe llamar "tv sensor" para saber si este campo es
-  // %RH o presión -- el formato del vector no lleva esa distinción.
+  // El header del vector tv lleva sensor_kind_id() para que el consumidor
+  // sepa si este campo es %RH o presión.
   // Upgrade: si hace falta %RH real con un BMP280 en el bus, hay que sumar
   // un sensor de humedad separado -- fuera del alcance de este spec.
   float hpa = bmp.readPressure() / 100.0f;  // Pa -> hPa
@@ -60,6 +60,11 @@ uint8_t read_hum_pct() {
   if (scaled < 0) scaled = 0;
   if (scaled > 255) scaled = 255;
   return (uint8_t)lroundf(scaled);
+}
+
+uint8_t sensor_kind_id() {
+  if (!probed) probe();
+  return (uint8_t)detected;  // Kind: NONE=0, BME280=1, BMP280=2
 }
 
 const char* sensor_kind() {
