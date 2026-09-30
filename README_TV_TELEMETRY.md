@@ -1,10 +1,12 @@
 # Telemetría vectorial `tv` (XIAO nRF52840 + Wio-SX1262, repeater)
 
 Variante del firmware **repeater** de MeshCore que guarda 24 h de
-temperatura (y humedad o presión, según el sensor) en un ring en RAM y las
-entrega como vectores de texto compactos cuando se consulta con el comando
-`tv <since>`. Pensado para un backend que hace polling periódico (cada
-hora, per la spec), no para lectura instantánea por la malla.
+temperatura (y humedad o presión, según el sensor) en un ring en RAM, una
+muestra cada **30 min** (48 slots), y las entrega como vectores de texto
+compactos (formato **v1**, base64url, ver abajo) con el comando
+`tv <since>`: el día completo entra en una sola consulta. Pensado para un
+backend que hace polling periódico (cada hora, per la spec), no para
+lectura instantánea por la malla.
 
 - **Target de hardware**: Seeed XIAO nRF52840 + módulo LoRa Wio-SX1262
   (entorno PlatformIO `variants/xiao_nrf52`), mismo bus I2C (`D6`/`D7`) que
@@ -13,9 +15,9 @@ hora, per la spec), no para lectura instantánea por la malla.
   agregando `-D WITH_TV_TELEMETRY=1`. El repeater plano
   (`Xiao_nrf52_repeater`) no incluye nada de esto: todo el código nuevo
   está detrás de ese flag y no toca ningún otro build.
-- **Spec completa**: `docs/Spec telemetría vectorial MeshCore (XIAO nRF52).md`
-  — formato del vector, decisiones de diseño, decoder TypeScript de
-  referencia.
+- **Spec original**: `docs/Spec telemetría vectorial MeshCore (XIAO nRF52).md`
+  — decisiones de diseño del ring/muestreo. Su formato de vector
+  (`T,H,t;dT,dH,dt;...`, "v0") ya fue reemplazado por el v1 descrito acá.
 - **Código**: `src/helpers/tv_telemetry.h` (ring + encoder, sin floats, sin
   filesystem), `src/helpers/tv_sensor.h/.cpp` (detección de sensor +
   lectura entera), `examples/simple_repeater/MyMesh.cpp` (comandos CLI +
@@ -37,57 +39,79 @@ El campo `H` del vector cambia de significado según qué se detectó:
 | BMP280 (no mide humedad) | presión atmosférica escalada: `hPa - 800`, saturado a `[0,255]` (cubre ~800-1055 hPa) |
 | Ninguno | el muestreo no arranca; `tv <since>` siempre responde `-` |
 
-El vector **no lleva un discriminador propio** para esto — hay que
-consultar `tv sensor` para saber cómo interpretar `H` antes de decodificar.
+El header del vector (primer carácter) indica cuál de los dos es, así que
+los decoders muestran %RH o hPa automáticamente. `tv sensor` queda solo como
+diagnóstico.
 
 ## Comandos CLI
 
 | Comando | Respuesta | Notas |
 | --- | --- | --- |
 | `tv sensor` | `BME280`, `BMP280` o `none` | Diagnóstico: qué detectó el firmware al boot. |
-| `tv <since>` | Un vector (`T,H,t;dT,dH,dt;...`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
+| `tv <since>` | Un vector v1 (ej. `FAFBx1KKIuA3CCCBDC.C~BFA8`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
 | `clock` | Fecha/hora UTC legible (`HH:MM - D/M/AAAA UTC`) | **No** da epoch en minutos crudo — ver la receta de uso más abajo. |
 
 El reply de `tv` está limitado a `TV_REPLY_CAP = 150` bytes (el buffer de
 reply real de `MyMesh::onPeerDataRecv` es de 161 bytes; se deja margen).
 
+## Formato del vector (v1)
+
+Alfabeto base64url (`A–Z a–z 0–9 - _`, 6 bits por carácter), sin
+separadores. Pensado para enlaces débiles: menos bytes = menos airtime y
+menos round trips.
+
+```
+V NN EEEEE TT HH | dT dH | .k | ~TTHH | ...
+```
+
+| Token | Chars | Contenido |
+| --- | --- | --- |
+| `V` | 1 | `(versión 1 << 2) \| sensor`: `F` = BME280, `G` = BMP280 |
+| `NN` | 2 | cantidad de registros del vector (el decoder detecta truncamiento) |
+| `EEEEE` | 5 | `epoch_min` exacto del anchor (primer registro) |
+| `TT` | 2 | temperatura del anchor en décimas de °C, zigzag |
+| `HH` | 2 | campo `H` del anchor (0-255) |
+| `dT dH` | 2 | registro en el slot siguiente: 1 char zigzag c/u (−32..+31), delta vs el registro **anterior** |
+| `.k` | 2 | saltar `k` slots vacíos (1-63; se repite si el hueco es mayor) |
+| `~TTHH` | 5 | registro en el slot siguiente con T/H absolutos (el delta no entraba en 1 char) |
+
+- **Signos**: zigzag (`0,−1,1,−2,2… → 0,1,2,3,4…`), 1 bit por valor.
+- **Tiempo implícito**: después del anchor, cada registro es el inicio de su
+  bucket de 30 min (`bucket × 30`, cae en :00 o :30). El firmware muestrea
+  al entrar al bucket, así que en régimen normal coincide con el minuto
+  real; si el `loop()` se atrasó, el timestamp decodificado puede
+  adelantarse hasta 29 min.
+- **`since` se compara por bucket** (`epoch_min / 30`), así que el backend
+  puede mandar tal cual el `epoch_min` decodificado del último registro.
+- Sin datos: `-`.
+
 ## Paginación: qué pasa cuando el ring está lleno
 
-96 slots (uno cada 15 min = 24 h) no caben en un solo paquete de 150 bytes.
-`encode()` corta limpio — nunca parte un registro — y el backend tiene que
-repetir la consulta actualizando `since` hasta vaciar el ring, tal como
-describe la spec.
+El reply está limitado a 150 bytes (149 útiles + NUL): header de 12 chars
++ 2 por registro → **hasta 69 registros por página** con deltas chicos. El
+intervalo de 30 min se eligió para que el día completo (48 registros = 106
+bytes) salga en **1 sola consulta**, con 43 bytes de margen para ~14 saltos
+grandes (`~`, +3 c/u) o huecos (`.k`, +2 c/u). Con 20 min (72 registros) ya
+no entraba; con 24 min entraba con solo 19 bytes de margen y timestamps
+desalineados de la hora.
 
-**Ejemplo concreto**, con lecturas estables todo el día (`dT=0`, `dH=0`,
-como en una habitación sin grandes cambios), anchor en epoch `29840000`,
-`T=280` (28.0 °C), campo `H`/presión `=155`:
+No es una garantía: un día con más saltos que ese margen sale en 2
+páginas. `encode()` corta limpio — nunca parte un registro — y la
+paginación sigue funcionando igual.
 
-**1ª llamada — `tv 0`:**
+**Ejemplo concreto**, lecturas estables (`T=280` → 28.0 °C, `H=155`),
+anchor en epoch `29840010`, 18 registros (9 h):
 
 ```
-280,155,29840000;0,0,15;0,0,30;0,0,45;0,0,60;0,0,75;0,0,90;0,0,105;0,0,120;0,0,135;0,0,150;0,0,165;0,0,180;0,0,195;0,0,210;0,0,225;0,0,240;0,0,255
+FASBx1KKIwCbAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 ```
 
-Anchor + 17 deltas = **18 registros**, 146 bytes. El siguiente registro
-(`dt=270`) no entra (146+8 ≥ 150) → se corta ahí. Cubre desde el anchor
-hasta 4 h 15 min después.
+46 bytes (el formato viejo necesitaba 146 para lo mismo). `S` = 18
+registros, `AA` = delta 0,0.
 
-**2ª llamada — `tv 29840255`** (`since` = epoch del último registro
-recibido = `29840000+255`): el registro que quedó afuera (`dt=270`
-original) pasa a ser el **nuevo anchor**, con valores absolutos otra vez —
-los deltas se resetean a chico y vuelven a caber ~17-18 registros. Así
-sucesivamente.
-
-Por qué cada respuesta rinde ~18 registros y no menos: los deltas son
-siempre contra el anchor *de esa respuesta*, nunca contra un anchor fijo
-del día — por eso `dt` vuelve a arrancar en 2 dígitos en cada llamada, en
-vez de acumular hasta 4 dígitos (`dt` podría llegar a `1425` si el anchor
-fuera fijo para todo el día).
-
-**Round trips para vaciar el ring completo:** `96 / ~18 ≈ 6 idas y
-vueltas` — el backend para cuando la respuesta es `-` o trae menos
-registros de los que el paquete podría contener (ver "Flujo del backend"
-en la spec).
+Si hubo más de una página: `tv <epoch_min del último registro decodificado>`. El
+primer registro que quedó afuera pasa a ser el nuevo anchor. El backend para
+cuando recibe `-` o una página que no llenó el paquete.
 
 Si el backend hace polling una vez al día en vez de cada hora (recomendado
 por la spec), corre el riesgo de quedar justo en el borde de perder las
@@ -100,12 +124,12 @@ extra ya las sobrescribió.
    razonable (fecha/hora UTC legible). Es solo una referencia humana: no
    devuelve epoch en minutos, así que no sirve para calcular `since` a
    mano.
-2. **`tv 0`** — primer paquete. El anchor (primer registro) trae el
-   `epoch_min` real en su tercer campo — es la fuente real de `since` para
-   la siguiente llamada, no algo que se derive de `clock`.
-3. **`tv <epoch_min del último registro recibido>`** — siguiente página,
-   repitiendo el paso 3 hasta que la respuesta sea `-` o venga más corta
-   que la anterior (ring vaciado).
+2. **`tv 0`** — primer paquete. Decodificalo (`python3
+   tools/tv_decoder/tv_decoder.py '<vector>'`): el `epoch_min` del último
+   registro es la fuente de `since` para la siguiente llamada, no algo que
+   se derive de `clock`.
+3. **`tv <epoch_min del último registro decodificado>`** — siguiente
+   página, repitiendo el paso 3 hasta que la respuesta sea `-`.
 
 El muestreo arranca con el reloj interno de la XIAO esté o no sincronizado
 con `clock sync` — no depende de eso (ver spec, sección "Desviaciones").
@@ -161,11 +185,19 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
   completa: formato del vector, decisiones de diseño, decoder TypeScript
   de referencia.
 - `tools/tv_decoder/tv_decoder.py` y `tools/tv_decoder/tv_decoder.ts` —
-  decoders standalone (sin dependencias externas) para el backend, ambos
-  con el mismo CLI: `python3 tv_decoder.py "<vector>"` / `node
-  tv_decoder.ts "<vector>"`. Con `--tv_hr_adjust` (default 800, el mismo
-  offset que usa `tv_sensor.cpp`) des-escalan la columna `H` a hPa reales
-  cuando el nodo tiene BMP280 en vez de BME280.
+  decoders v1 standalone (sin dependencias externas), mismo CLI:
+  `python3 tv_decoder.py '<vector>'` / `node tv_decoder.ts '<vector>'`.
+  Leen el sensor del header y muestran %RH o hPa (offset 800, el de
+  `tv_sensor.cpp`) sin flags.
+- `tools/tv_decoder/test_tv_roundtrip.py` — compila el encoder real en host
+  (`g++`), pagina un día completo y casos borde (huecos, re-anchor,
+  negativos, truncamiento) y los decodifica: `python3
+  tools/tv_decoder/test_tv_roundtrip.py`.
+- **Vectores del formato viejo v0** (`T,H,t;dT,dH,dt;...`, firmware previo
+  a este cambio): los decoders v1 los rechazan y apuntan al decoder
+  anterior en git:
+  `git show tv-v0:tools/tv_decoder/tv_decoder.py > tv_decoder_v0.py`
+  (o `.ts`).
 - `README_I2C_TELEMETRY.md` — telemetría formal (`GetTelemetry`,
   CayenneLPP) para firmwares `companion_radio`; mecanismo distinto, no
   relacionado con `tv`.

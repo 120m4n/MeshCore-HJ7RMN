@@ -1,12 +1,21 @@
-// tv_decoder.ts -- decodifica vectores "T,H,t;dT,dH,dt;..." del comando
-// `tv <since>` de MeshCore (ver docs/Spec telemetría vectorial MeshCore
-// (XIAO nRF52).md). Sin dependencias externas, solo el runtime de JS/TS.
+// tv_decoder.ts -- decodifica vectores v1 del comando `tv <since>` de
+// MeshCore (formato compacto base64url, ver encode() en
+// src/helpers/tv_telemetry.h y README_TV_TELEMETRY.md). Sin dependencias.
 //
-// H es %RH si el nodo detectó un BME280, o presión atmosférica escalada
-// (hPa - 800) si detectó un BMP280 -- confirmar con el comando `tv sensor`
-// del nodo antes de interpretar el campo (ver README_TV_TELEMETRY.md).
-// Usar --tv_hr_adjust para des-escalar esa columna a hPa reales cuando
-// corresponda (ver printHelp() / --help).
+// El header del vector dice qué sensor tiene el nodo: con BME280 la columna H
+// es %RH; con BMP280 es presión escalada (hPa - 800) y se muestra en hPa.
+//
+// Vectores del formato viejo ("T,H,t;dT,dH,dt;...") se rechazan: usar el
+// decoder anterior desde git (ver V0_HINT).
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const INTERVAL_MIN = 30;
+const FORMAT_VERSION = 1;
+const KINDS: Record<number, string> = { 1: "BME280", 2: "BMP280" };
+const BMP_OFFSET_HPA = 800; // mismo offset que read_hum_pct() en tv_sensor.cpp
+const V0_HINT =
+  'vector en formato viejo v0 ("T,H,t;..."): decodificalo con el decoder anterior de git: ' +
+  "git show tv-v0:tools/tv_decoder/tv_decoder.ts > tv_decoder_v0.ts";
 
 export interface TvSample {
   epochMin: number; // minutos desde epoch, UTC
@@ -17,92 +26,97 @@ export interface TvSample {
 
 export class TvParseError extends Error {}
 
-const INT = /^-?\d+$/;
+const unzigzag = (u: number) => (u >>> 1) ^ -(u & 1);
 
-export function decodeVector(s: string): TvSample[] {
+// Devuelve el sensor ("BME280", "BMP280" o "" si vacío) y las muestras.
+export function decodeVector(s: string): { kind: string; samples: TvSample[] } {
   const v = s.trim();
-  if (v === "" || v === "-") return [];
+  if (v === "" || v === "-") return { kind: "", samples: [] };
+  if (v.includes(",")) throw new TvParseError(V0_HINT);
 
-  const recs = v.split(";").map((r, i) => {
-    const f = r.split(",");
-    if (f.length !== 3 || !f.every((x) => INT.test(x))) {
-      throw new TvParseError(`registro ${i} inválido: "${r}"`);
+  let pos = 0;
+  const take = (n: number): number => {
+    if (pos + n > v.length) throw new TvParseError("vector truncado");
+    let val = 0;
+    for (let i = 0; i < n; i++) {
+      const d = B64.indexOf(v[pos + i]);
+      if (d < 0) throw new TvParseError(`carácter inválido "${v[pos + i]}" en posición ${pos + i}`);
+      val = val * 64 + d; // sin << para no desbordar 32 bits con signo
     }
-    return f.map(Number) as [number, number, number];
-  });
+    pos += n;
+    return val;
+  };
 
-  const [t0, h0, e0] = recs[0]; // anchor
-  let prevE = 0;
+  const head = take(1);
+  const kind = KINDS[head & 3];
+  if (head >> 2 !== FORMAT_VERSION || !kind) {
+    throw new TvParseError(`header desconocido "${v[0]}" (versión ${head >> 2})`);
+  }
+  const count = take(2);
+  const e0 = take(5);
+  let t = unzigzag(take(2));
+  let h = take(2);
+  const recs: [number, number, number][] = [[e0, t, h]];
+  let slot = Math.floor(e0 / INTERVAL_MIN);
 
-  return recs.map(([t, h, e], i) => {
-    const T = i === 0 ? t : t0 + t;
-    const H = i === 0 ? h : h0 + h;
-    const E = i === 0 ? e : e0 + e;
-    if (H < 0 || H > 255) throw new TvParseError(`registro ${i}: H fuera de rango (${H})`);
-    if (E <= prevE) throw new TvParseError(`registro ${i}: tiempo no creciente`);
-    prevE = E;
-    return { epochMin: E, date: new Date(E * 60_000), tempC: T / 10, hRaw: H };
-  });
-}
-
-function printHelp() {
-  console.log(
-    'Uso: node tv_decoder.ts "<vector>" [--tv_hr_adjust[=OFFSET]]\n\n' +
-    '  <vector>            vector tv, ej. "330,65,29840113;-12,3,61"\n' +
-    "  --tv_hr_adjust      el nodo tiene BMP280 (sin humedad): el campo H trae\n" +
-    "                      presión escalada (hPa - OFFSET). Suma OFFSET de vuelta\n" +
-    "                      para mostrar hPa reales en vez del H crudo. Sin valor,\n" +
-    "                      usa 800 (el offset del firmware, ver tv_sensor.cpp).",
-  );
-}
-
-function parseArgs(argv: string[]): { vector: string; hrAdjust: number | null } {
-  let vector: string | null = null;
-  let hrAdjust: number | null = null;
-
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "-h" || a === "--help") {
-      printHelp();
-      process.exit(0);
-    } else if (a.startsWith("--tv_hr_adjust=")) {
-      hrAdjust = Number(a.slice("--tv_hr_adjust=".length));
-    } else if (a === "--tv_hr_adjust") {
-      const next = argv[i + 1];
-      if (next !== undefined && /^-?\d+$/.test(next)) {
-        hrAdjust = Number(next);
-        i++;
-      } else {
-        hrAdjust = 800;
-      }
-    } else if (vector === null) {
-      vector = a;
+  while (pos < v.length) {
+    const c = v[pos];
+    if (c === ".") {
+      pos++;
+      slot += take(1);
+      continue;
     }
+    if (c === "~") {
+      pos++;
+      t = unzigzag(take(2));
+      h = take(2);
+    } else {
+      t += unzigzag(take(1));
+      h += unzigzag(take(1));
+    }
+    slot++;
+    recs.push([slot * INTERVAL_MIN, t, h]);
   }
 
-  if (vector === null) {
-    printHelp();
-    process.exit(1);
+  if (recs.length !== count) {
+    throw new TvParseError(`se esperaban ${count} registros y llegaron ${recs.length}: vector truncado`);
   }
-  return { vector, hrAdjust };
+
+  const samples = recs.map(([e, t, h], i) => {
+    if (h < 0 || h > 255) throw new TvParseError(`registro ${i}: H fuera de rango (${h})`);
+    return { epochMin: e, date: new Date(e * 60_000), tempC: t / 10, hRaw: h };
+  });
+  return { kind, samples };
 }
 
 function main() {
-  const { vector, hrAdjust } = parseArgs(process.argv.slice(2));
-  const samples = decodeVector(vector);
+  const vector = process.argv[2];
+  if (vector === undefined || vector === "-h" || vector === "--help") {
+    console.log('Uso: node tv_decoder.ts \'<vector>\'   (ej. \'FAFBx1KKIuA3CCCBDC.C~BFA8\')');
+    process.exit(vector === undefined ? 1 : 0);
+  }
 
-  const hrLabel = hrAdjust !== null ? "Presión (hPa)" : "H (raw)";
+  let res: { kind: string; samples: TvSample[] };
+  try {
+    res = decodeVector(vector);
+  } catch (e) {
+    if (!(e instanceof TvParseError)) throw e;
+    console.error(`error: ${e.message}`);
+    process.exit(1);
+  }
+
+  const bmp = res.kind === "BMP280";
   const row = (a: string, b: string, c: string, d: string, e: string) =>
     `${a.padStart(2)}  ${b.padStart(7)}  ${c.padStart(13)}  ${d.padStart(10)}  ${e}`;
 
-  console.log(row("#", "T (°C)", hrLabel, "epoch_min", "UTC"));
+  console.log(`sensor: ${res.kind || "-"}  registros: ${res.samples.length}`);
+  console.log(row("#", "T (°C)", bmp ? "Presión (hPa)" : "%RH", "epoch_min", "UTC"));
   console.log("-".repeat(59));
-  samples.forEach((s, i) => {
-    const hrValue = hrAdjust !== null ? s.hRaw + hrAdjust : s.hRaw;
+  res.samples.forEach((s, i) => {
     console.log(row(
       String(i),
       s.tempC.toFixed(1),
-      String(hrValue),
+      String(bmp ? s.hRaw + BMP_OFFSET_HPA : s.hRaw),
       String(s.epochMin),
       s.date.toISOString().replace("T", " ").replace(".000Z", "Z"),
     ));

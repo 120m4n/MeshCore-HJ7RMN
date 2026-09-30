@@ -1,18 +1,27 @@
-"""tv_decoder.py -- decodifica vectores "T,H,t;dT,dH,dt;..." del comando
-`tv <since>` de MeshCore (ver docs/Spec telemetría vectorial MeshCore
-(XIAO nRF52).md). Solo stdlib, sin dependencias externas.
+"""tv_decoder.py -- decodifica vectores v1 del comando `tv <since>` de
+MeshCore (formato compacto base64url, ver encode() en
+src/helpers/tv_telemetry.h y README_TV_TELEMETRY.md). Solo stdlib.
 
-H es %RH si el nodo detectó un BME280, o presión atmosférica escalada
-(hPa - 800) si detectó un BMP280 -- confirmar con el comando `tv sensor`
-del nodo antes de interpretar el campo (ver README_TV_TELEMETRY.md).
-Usar --tv_hr_adjust para des-escalar esa columna a hPa reales cuando
-corresponda (ver `main()` / `--help`).
+El header del vector dice qué sensor tiene el nodo: con BME280 la columna H
+es %RH; con BMP280 es presión escalada (hPa - 800) y se muestra en hPa.
+
+Vectores del formato viejo ("T,H,t;dT,dH,dt;...") se rechazan: usar el
+decoder anterior desde git (ver V0_HINT).
 """
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
+B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+IDX = {c: i for i, c in enumerate(B64)}
+INTERVAL_MIN = 30
+FORMAT_VERSION = 1
+KINDS = {1: "BME280", 2: "BMP280"}
+BMP_OFFSET_HPA = 800  # mismo offset que read_hum_pct() en tv_sensor.cpp
+V0_HINT = ("vector en formato viejo v0 (\"T,H,t;...\"): decodificalo con el decoder "
+           "anterior de git: git show tv-v0:tools/tv_decoder/tv_decoder.py > tv_decoder_v0.py")
 
 class TvParseError(ValueError):
     pass
@@ -24,56 +33,85 @@ class TvSample:
     temp_c: float
     h_raw: int  # %RH (BME280) o hPa-800 (BMP280)
 
-def decode_vector(s: str) -> list[TvSample]:
+def unzigzag(u: int) -> int:
+    return (u >> 1) ^ -(u & 1)
+
+def decode_vector(s: str) -> tuple[str, list[TvSample]]:
+    """Devuelve (sensor, muestras). sensor es "BME280", "BMP280" o "" si vacío."""
     v = s.strip()
     if v in ("", "-"):
-        return []
+        return "", []
+    if "," in v:
+        raise TvParseError(V0_HINT)
 
-    records: list[tuple[int, int, int]] = []
-    for i, r in enumerate(v.split(";")):
-        fields = r.split(",")
-        if len(fields) != 3:
-            raise TvParseError(f"registro {i} inválido: {r!r}")
-        try:
-            records.append(tuple(int(f) for f in fields))  # type: ignore[arg-type]
-        except ValueError:
-            raise TvParseError(f"registro {i} inválido: {r!r}")
+    pos = 0
 
-    t0, h0, e0 = records[0]  # anchor
-    prev_e = 0
+    def take(n: int) -> int:
+        nonlocal pos
+        chunk = v[pos:pos + n]
+        if len(chunk) < n:
+            raise TvParseError("vector truncado")
+        pos += n
+        val = 0
+        for c in chunk:
+            if c not in IDX:
+                raise TvParseError(f"carácter inválido {c!r} en posición {pos - n}")
+            val = (val << 6) | IDX[c]
+        return val
+
+    head = take(1)
+    if head >> 2 != FORMAT_VERSION or (head & 3) not in KINDS:
+        raise TvParseError(f"header desconocido {v[0]!r} (versión {head >> 2})")
+    kind = KINDS[head & 3]
+    count = take(2)
+    e0 = take(5)
+    t, h = unzigzag(take(2)), take(2)
+    recs = [(e0, t, h)]
+    slot = e0 // INTERVAL_MIN
+
+    while pos < len(v):
+        c = v[pos]
+        if c == ".":
+            pos += 1
+            slot += take(1)
+            continue
+        if c == "~":
+            pos += 1
+            t, h = unzigzag(take(2)), take(2)
+        else:
+            t += unzigzag(take(1))
+            h += unzigzag(take(1))
+        slot += 1
+        recs.append((slot * INTERVAL_MIN, t, h))
+
+    if len(recs) != count:
+        raise TvParseError(f"se esperaban {count} registros y llegaron {len(recs)}: vector truncado")
+
     out: list[TvSample] = []
-    for i, (t, h, e) in enumerate(records):
-        T = t if i == 0 else t0 + t
-        H = h if i == 0 else h0 + h
-        E = e if i == 0 else e0 + e
-        if not (0 <= H <= 255):
-            raise TvParseError(f"registro {i}: H fuera de rango ({H})")
-        if E <= prev_e:
-            raise TvParseError(f"registro {i}: tiempo no creciente")
-        prev_e = E
-        date = datetime.fromtimestamp(E * 60, tz=timezone.utc)
-        out.append(TvSample(E, date, T / 10, H))
-    return out
+    for i, (e, t, h) in enumerate(recs):
+        if not 0 <= h <= 255:
+            raise TvParseError(f"registro {i}: H fuera de rango ({h})")
+        out.append(TvSample(e, datetime.fromtimestamp(e * 60, tz=timezone.utc), t / 10, h))
+    return kind, out
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Decodifica un vector tv de MeshCore.")
-    parser.add_argument("vector", help='vector tv, ej. "330,65,29840113;-12,3,61"')
-    parser.add_argument(
-        "--tv_hr_adjust", nargs="?", type=int, const=800, default=None, metavar="OFFSET",
-        help="el nodo tiene BMP280 (sin humedad): el campo H trae presión escalada "
-             "(hPa - OFFSET). Suma OFFSET de vuelta para mostrar hPa reales en vez del "
-             "H crudo. Sin valor, usa 800 (el offset del firmware, ver tv_sensor.cpp).",
-    )
+    parser = argparse.ArgumentParser(description="Decodifica un vector tv (v1) de MeshCore.")
+    parser.add_argument("vector", help='vector tv, ej. "FAFBx1KKIuA3CCCBDC.C~BFA8"')
     args = parser.parse_args()
 
-    samples = decode_vector(args.vector)
+    try:
+        kind, samples = decode_vector(args.vector)
+    except TvParseError as e:
+        parser.exit(1, f"error: {e}\n")
 
-    hr_label = "Presión (hPa)" if args.tv_hr_adjust is not None else "H (raw)"
+    bmp = kind == "BMP280"
+    hr_label = "Presión (hPa)" if bmp else "%RH"
+    print(f"sensor: {kind or '-'}  registros: {len(samples)}")
     header = f"{'#':>2}  {'T (°C)':>7}  {hr_label:>13}  {'epoch_min':>10}  {'UTC':<19}"
     print(header)
     print("-" * len(header))
     for i, s in enumerate(samples):
-        hr_value = s.h_raw + args.tv_hr_adjust if args.tv_hr_adjust is not None else s.h_raw
+        hr_value = s.h_raw + BMP_OFFSET_HPA if bmp else s.h_raw
         print(f"{i:>2}  {s.temp_c:>7.1f}  {hr_value:>13}  {s.epoch_min:>10}  "
               f"{s.date.strftime('%Y-%m-%d %H:%M:%S')}")
 
