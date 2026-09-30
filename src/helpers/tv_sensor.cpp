@@ -21,6 +21,14 @@ void probe() {
   probed = true;
   if (bme.begin(0x76, &Wire) || bme.begin(0x77, &Wire)) {
     detected = Kind::BME280;
+    // Mismo modo que EnvironmentSensorManager (forzado, X1): el chip es
+    // compartido y su takeForcedMeasurement() lo deja dormido; en modo normal
+    // esta instancia leería el último valor congelado para siempre.
+    bme.setSampling(Adafruit_BME280::MODE_FORCED,
+                    Adafruit_BME280::SAMPLING_X1,
+                    Adafruit_BME280::SAMPLING_X1,
+                    Adafruit_BME280::SAMPLING_X1,
+                    Adafruit_BME280::FILTER_OFF);
   } else if (bmp.begin(0x76) || bmp.begin(0x77)) {
     detected = Kind::BMP280;
   }
@@ -35,7 +43,10 @@ bool sensor_ready() {
   return detected != Kind::NONE;
 }
 
+// sample_tick() llama read_temp_dC() y enseguida read_hum_pct(): la medición
+// forzada de acá sirve para las dos lecturas.
 int16_t read_temp_dC() {
+  if (detected == Kind::BME280) bme.takeForcedMeasurement();
   float c = (detected == Kind::BME280) ? bme.readTemperature() : bmp.readTemperature();
   return (int16_t)lroundf(c * 10.0f);
 }
