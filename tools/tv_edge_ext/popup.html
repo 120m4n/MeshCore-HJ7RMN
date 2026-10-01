@@ -26,6 +26,7 @@
   table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
   th, td { padding: 2px 6px; text-align: right; border-bottom: 1px solid #8884; }
   td:last-child, th:last-child { text-align: left; }
+  #warn { color: var(--ink-2); }
   #err { color: #c00; white-space: pre-wrap; }
   #next { font-family: monospace; }
 </style>
@@ -34,10 +35,12 @@
 <textarea id="in" placeholder="Pega la salida de `tv 0` (una línea por página)"></textarea>
 <div class="row">
   <button id="go">Decodificar</button>
+  <button id="toggle" aria-pressed="true">Gráficas: on</button>
   <button id="csv" disabled>Copiar CSV</button>
   <label><input type="checkbox" id="local"> hora local</label>
 </div>
 <div id="err"></div>
+<div id="warn"></div>
 <div id="info"></div>
 <div id="charts"></div>
 <table id="tbl" hidden><thead></thead><tbody></tbody></table>
