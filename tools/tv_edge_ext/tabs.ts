@@ -11,6 +11,15 @@ export interface Tab { line: number; kind: string; samples: TvSample[] } // line
 const vectorOf = (line: string) =>
   (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => (b.length > a.length ? b : a), "");
 
+// Pestaña «Todas»: junta las líneas del mismo sensor, ordenadas por epoch y sin duplicados
+// (las páginas tv 0 / tv N pueden solaparse). null si hay <2 pestañas o sensores mezclados.
+export function mergeTabs(tabs: Tab[]): Tab | null {
+  if (tabs.length < 2 || tabs.some((t) => t.kind !== tabs[0].kind)) return null;
+  const byEpoch = new Map<number, TvSample>();
+  for (const t of tabs) for (const s of t.samples) byEpoch.set(s.epochMin, s);
+  return { line: 0, kind: tabs[0].kind, samples: [...byEpoch.values()].sort((a, b) => a.epochMin - b.epochMin) };
+}
+
 // Válida = decodifica y trae >=1 registro. Las vacías y "-" se ignoran; las que fallan van a errors;
 // las válidas por encima de max se cuentan en skipped.
 export function parseLines(text: string, max = MAX_TABS) {

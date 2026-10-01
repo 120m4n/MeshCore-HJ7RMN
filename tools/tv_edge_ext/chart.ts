@@ -6,6 +6,13 @@ export interface Panel { title: string; pts: Pt[] }
 
 const SLOT_MIN = 30; // intervalo de muestreo del firmware (INTERVAL_MIN)
 
+// Puntos de mínimo y máximo; null si la serie es plana (no hay extremos que marcar).
+export function extremes(pts: Pt[]): { min: Pt; max: Pt } | null {
+  const min = pts.reduce((a, b) => (b.y < a.y ? b : a));
+  const max = pts.reduce((a, b) => (b.y > a.y ? b : a));
+  return min.y === max.y ? null : { min, max };
+}
+
 export const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 // Ticks "redondos" que cubren [min, max] con ~n divisiones.
@@ -84,6 +91,16 @@ export function renderCharts(host: HTMLElement, panels: Panel[], offsetMin: numb
     for (const seg of segments(p.pts)) {
       if (seg.length === 1) el(svg, "circle", { cx: px(seg[0].x), cy: py(seg[0].y), r: 2.5, class: "dot" });
       else el(svg, "path", { d: "M" + seg.map((q) => `${px(q.x)} ${py(q.y)}`).join("L"), class: "line" });
+    }
+    const ex = extremes(p.pts);
+    if (ex) {
+      const mark = (q: Pt, label: string, dy: number) => {
+        const x = px(q.x), edge = x < L + 34 ? "start" : x > W - R - 34 ? "end" : "middle";
+        el(svg, "circle", { cx: x, cy: py(q.y), r: 4, class: "ext" });
+        el(svg, "text", { x, y: py(q.y) + dy, "text-anchor": edge, class: "t-ink halo" }, `${label} ${q.y.toFixed(1)}`);
+      };
+      mark(ex.max, "máx", -8);
+      mark(ex.min, "mín", 16);
     }
     // ponytail: promedio simple, no ponderado por tiempo; con huecos grandes puede sesgarse.
     const m = mean(p.pts.map((q) => q.y));
