@@ -11,3 +11,14 @@ if (kind !== "BME280" || JSON.stringify(samples.map((s) => s.epochMin)) !== JSON
   process.exit(1);
 }
 console.log(`ok: ${samples.length} registros coinciden con tv_decoder.py`);
+
+// chart.ts: funciones puras
+import { mean, niceTicks, segments } from "./chart.ts";
+const eq = (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) { console.error("FAIL", msg, a, b); process.exit(1); } };
+const nt = niceTicks(27.9, 28.1);
+eq(nt[0] <= 27.9 && nt.at(-1) >= 28.1 && nt.length <= 6, true, "niceTicks cubre el rango corto");
+eq(niceTicks(0, 100), [0, 50, 100], "niceTicks 0-100");
+eq(niceTicks(-3.5, 28.1), [-10, 0, 10, 20, 30], "niceTicks cruza cero");
+eq(mean([1, 2, 6]), 3, "mean");
+eq(segments([{ x: 0, y: 1 }, { x: 30, y: 1 }, { x: 90, y: 1 }, { x: 120, y: 1 }]).map((s) => s.length), [2, 2], "segments corta en hueco");
+console.log("ok: chart.ts (niceTicks, mean, segments)");

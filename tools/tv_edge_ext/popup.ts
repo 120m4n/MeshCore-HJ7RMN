@@ -1,5 +1,6 @@
 // popup.ts -- UI mínima sobre decodeVector() de tools/tv_decoder/tv_decoder.ts.
 import { decodeVector, TvParseError, TvSample } from "../tv_decoder/tv_decoder";
+import { renderCharts } from "./chart";
 
 const BMP_OFFSET_HPA = 800;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,6 +19,7 @@ function decode() {
   rows = [];
   tbl.hidden = true;
   $("next").textContent = "";
+  $("charts").replaceChildren();
   $<HTMLButtonElement>("csv").disabled = true;
 
   const samples: TvSample[] = [];
@@ -53,6 +55,11 @@ function decode() {
   tbl.tBodies[0].innerHTML = rows.map((r) => "<tr>" + r.map((c) => `<td>${c}</td>`).join("") + "</tr>").join("");
   tbl.hidden = false;
   $<HTMLButtonElement>("csv").disabled = false;
+  const hVal = (s: TvSample) => (bmp ? s.hRaw + BMP_OFFSET_HPA : s.hRaw);
+  renderCharts($("charts"), [
+    { title: "Temperatura (°C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
+    { title: bmp ? "Presión (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s) })) },
+  ], local ? -new Date().getTimezoneOffset() : 0);
   $("next").textContent = `siguiente: tv ${samples[samples.length - 1].epochMin}`;
 }
 
