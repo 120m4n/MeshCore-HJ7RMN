@@ -21,7 +21,11 @@ eq(niceTicks(0, 100), [0, 50, 100], "niceTicks 0-100");
 eq(niceTicks(-3.5, 28.1), [-10, 0, 10, 20, 30], "niceTicks cruza cero");
 eq(mean([1, 2, 6]), 3, "mean");
 eq(segments([{ x: 0, y: 1 }, { x: 30, y: 1 }, { x: 90, y: 1 }, { x: 120, y: 1 }]).map((s) => s.length), [2, 2], "segments corta en hueco");
-console.log("ok: chart.ts (niceTicks, mean, segments)");
+import { extremes } from "./chart.ts";
+const ex = extremes([{ x: 0, y: 2 }, { x: 30, y: 5 }, { x: 60, y: 1 }]);
+eq([ex.min.x, ex.max.x], [60, 30], "extremes mín/máx");
+eq(extremes([{ x: 0, y: 3 }, { x: 30, y: 3 }]), null, "extremes serie plana");
+console.log("ok: chart.ts (niceTicks, mean, segments, extremes)");
 
 // tabs.ts: una pestaña por línea válida (vectores BMP280 reales: 1 y 20 registros)
 import { parseLines } from "./tabs.ts";
@@ -32,4 +36,10 @@ eq(p.tabs.map((t) => [t.line, t.samples.length, t.kind]), [[1, 1, "BMP280"], [5,
 eq([p.errors.length, p.errors[0].startsWith("línea 4:"), p.skipped], [1, true, 0], "error parcial no aborta");
 p = parseLines(txt, 2);
 eq([p.tabs.length, p.skipped], [2, 1], "límite de tabs");
-console.log("ok: tabs.ts (parseLines)");
+import { mergeTabs } from "./tabs.ts";
+const t20 = parseLines(BMP20).tabs[0], t1 = parseLines(BMP1).tabs[0], t5 = parseLines(v).tabs[0];
+eq(mergeTabs([t20, t20]).samples.length, 20, "mergeTabs deduplica por epoch");
+const m = mergeTabs([t20, t1]);
+eq([m.line, m.samples.length, m.samples[0].epochMin < m.samples[1].epochMin], [0, 21, true], "mergeTabs ordena");
+eq([mergeTabs([t20]), mergeTabs([t20, t5])], [null, null], "mergeTabs null: 1 pestaña o sensores mezclados");
+console.log("ok: tabs.ts (parseLines, mergeTabs)");

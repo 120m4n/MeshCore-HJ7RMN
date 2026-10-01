@@ -100,6 +100,12 @@
   // tabs.ts
   var MAX_TABS = 6;
   var vectorOf = (line) => (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
+  function mergeTabs(tabs2) {
+    if (tabs2.length < 2 || tabs2.some((t) => t.kind !== tabs2[0].kind)) return null;
+    const byEpoch = /* @__PURE__ */ new Map();
+    for (const t of tabs2) for (const s of t.samples) byEpoch.set(s.epochMin, s);
+    return { line: 0, kind: tabs2[0].kind, samples: [...byEpoch.values()].sort((a, b) => a.epochMin - b.epochMin) };
+  }
   function parseLines(text, max = MAX_TABS) {
     const tabs2 = [], errors2 = [];
     let skipped2 = 0;
@@ -120,6 +126,11 @@
 
   // chart.ts
   var SLOT_MIN = 30;
+  function extremes(pts) {
+    const min = pts.reduce((a, b) => b.y < a.y ? b : a);
+    const max = pts.reduce((a, b) => b.y > a.y ? b : a);
+    return min.y === max.y ? null : { min, max };
+  }
   var mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
   function niceTicks(min, max, n = 4) {
     const raw = (max - min || 1) / n;
@@ -192,6 +203,16 @@
         if (seg.length === 1) el(svg, "circle", { cx: px(seg[0].x), cy: py(seg[0].y), r: 2.5, class: "dot" });
         else el(svg, "path", { d: "M" + seg.map((q) => `${px(q.x)} ${py(q.y)}`).join("L"), class: "line" });
       }
+      const ex = extremes(p.pts);
+      if (ex) {
+        const mark = (q, label, dy) => {
+          const x = px(q.x), edge = x < L + 34 ? "start" : x > W - R - 34 ? "end" : "middle";
+          el(svg, "circle", { cx: x, cy: py(q.y), r: 4, class: "ext" });
+          el(svg, "text", { x, y: py(q.y) + dy, "text-anchor": edge, class: "t-ink halo" }, `${label} ${q.y.toFixed(1)}`);
+        };
+        mark(ex.max, "m\xE1x", -8);
+        mark(ex.min, "m\xEDn", 16);
+      }
       const m = mean(p.pts.map((q) => q.y));
       el(svg, "line", { x1: L, x2: W - R, y1: py(m), y2: py(m), class: "mean" });
       el(svg, "text", { x: W - R, y: py(m) - 4, "text-anchor": "end", class: "t-ink halo" }, `prom ${m.toFixed(1)}`);
@@ -228,7 +249,21 @@
   // popup.ts
   var BMP_OFFSET_HPA2 = 800;
   var $ = (id) => document.getElementById(id);
-  var showCharts = true;
+  var PREFS = "tv_edge_ext.prefs";
+  var loadPrefs = () => {
+    try {
+      return JSON.parse(localStorage.getItem(PREFS) ?? "{}");
+    } catch {
+      return {};
+    }
+  };
+  var savePrefs = () => {
+    try {
+      localStorage.setItem(PREFS, JSON.stringify({ charts: showCharts, local: $("local").checked }));
+    } catch {
+    }
+  };
+  var showCharts = loadPrefs().charts ?? true;
   var tabs = [];
   var active = 0;
   var errors = [];
@@ -246,7 +281,10 @@
     setTimeout(() => btn.textContent = label, 1200);
   }
   function decode() {
-    ({ tabs, errors, skipped } = parseLines($("in").value));
+    let lines;
+    ({ tabs: lines, errors, skipped } = parseLines($("in").value));
+    const all = mergeTabs(lines);
+    tabs = all ? [...lines, all] : lines;
     active = 0;
     $("empty").hidden = true;
     render();
@@ -268,7 +306,7 @@
     tabs.forEach((t, i) => {
       const b = document.createElement("button");
       b.role = "tab";
-      b.textContent = `L${t.line} \xB7 ${t.samples.length} reg`;
+      b.textContent = `${t.line ? `L${t.line}` : "Todas"} \xB7 ${t.samples.length} reg`;
       b.setAttribute("aria-selected", String(i === active));
       b.tabIndex = i === active ? 0 : -1;
       b.addEventListener("click", () => select(i));
@@ -316,12 +354,19 @@
     showCharts = !showCharts;
     $("toggle").textContent = `Gr\xE1ficas: ${showCharts ? "on" : "off"}`;
     $("toggle").setAttribute("aria-pressed", String(showCharts));
+    savePrefs();
     render();
   });
-  $("local").addEventListener("change", render);
+  $("local").addEventListener("change", () => {
+    savePrefs();
+    render();
+  });
   $("csv").addEventListener(
     "click",
     () => copy([header, ...rows].map((r) => r.join(",")).join("\n"), $("csv"))
   );
   $("copynext").addEventListener("click", () => copy($("next").textContent, $("copynext")));
+  $("toggle").textContent = `Gr\xE1ficas: ${showCharts ? "on" : "off"}`;
+  $("toggle").setAttribute("aria-pressed", String(showCharts));
+  $("local").checked = loadPrefs().local ?? false;
 })();

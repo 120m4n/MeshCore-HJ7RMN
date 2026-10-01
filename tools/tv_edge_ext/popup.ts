@@ -1,12 +1,21 @@
 // popup.ts -- UI sobre parseLines()/renderCharts(): una pestaña por línea válida.
-import { MAX_TABS, parseLines, type Tab } from "./tabs";
+import { MAX_TABS, mergeTabs, parseLines, type Tab } from "./tabs";
 import { renderCharts } from "./chart";
 
 const BMP_OFFSET_HPA = 800;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-let showCharts = true;
-let tabs: Tab[] = [];
+// Preferencias del popup (se pierden al cerrarlo): localStorage puede no estar disponible.
+const PREFS = "tv_edge_ext.prefs";
+const loadPrefs = (): { charts?: boolean; local?: boolean } => {
+  try { return JSON.parse(localStorage.getItem(PREFS) ?? "{}"); } catch { return {}; }
+};
+const savePrefs = () => {
+  try { localStorage.setItem(PREFS, JSON.stringify({ charts: showCharts, local: $<HTMLInputElement>("local").checked })); } catch {}
+};
+
+let showCharts = loadPrefs().charts ?? true;
+let tabs: Tab[] = []; // pestañas de líneas + «Todas» al final si aplica
 let active = 0;
 let errors: string[] = [];
 let skipped = 0;
@@ -27,7 +36,10 @@ function copy(text: string, btn: HTMLElement) {
 }
 
 function decode() {
-  ({ tabs, errors, skipped } = parseLines($<HTMLTextAreaElement>("in").value));
+  let lines: Tab[];
+  ({ tabs: lines, errors, skipped } = parseLines($<HTMLTextAreaElement>("in").value));
+  const all = mergeTabs(lines);
+  tabs = all ? [...lines, all] : lines;
   active = 0;
   $("empty").hidden = true;
   render();
@@ -52,7 +64,7 @@ function render() {
   tabs.forEach((t, i) => {
     const b = document.createElement("button");
     b.role = "tab";
-    b.textContent = `L${t.line} · ${t.samples.length} reg`;
+    b.textContent = `${t.line ? `L${t.line}` : "Todas"} · ${t.samples.length} reg`;
     b.setAttribute("aria-selected", String(i === active));
     b.tabIndex = i === active ? 0 : -1;
     b.addEventListener("click", () => select(i));
@@ -106,10 +118,19 @@ $("toggle").addEventListener("click", () => {
   showCharts = !showCharts;
   $("toggle").textContent = `Gráficas: ${showCharts ? "on" : "off"}`;
   $("toggle").setAttribute("aria-pressed", String(showCharts));
+  savePrefs();
   render();
 });
-$("local").addEventListener("change", render);
+$("local").addEventListener("change", () => {
+  savePrefs();
+  render();
+});
 $("csv").addEventListener("click", () =>
   copy([header, ...rows].map((r) => r.join(",")).join("\n"), $("csv")),
 );
 $("copynext").addEventListener("click", () => copy($("next").textContent!, $("copynext")));
+
+// Estado inicial de los controles según las preferencias guardadas.
+$("toggle").textContent = `Gráficas: ${showCharts ? "on" : "off"}`;
+$("toggle").setAttribute("aria-pressed", String(showCharts));
+$<HTMLInputElement>("local").checked = loadPrefs().local ?? false;
