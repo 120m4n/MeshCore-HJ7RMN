@@ -208,11 +208,13 @@
   var BMP_OFFSET_HPA2 = 800;
   var $ = (id) => document.getElementById(id);
   var vectorOf = (line) => (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
+  var showCharts = true;
   var rows = [];
   var header = [];
   function decode() {
     const err = $("err"), tbl = $("tbl");
     err.textContent = "";
+    $("warn").textContent = "";
     rows = [];
     tbl.hidden = true;
     $("next").textContent = "";
@@ -249,13 +251,21 @@
     tbl.hidden = false;
     $("csv").disabled = false;
     const hVal = (s) => bmp ? s.hRaw + BMP_OFFSET_HPA2 : s.hRaw;
-    renderCharts($("charts"), [
+    if (showCharts && samples.length < 2) {
+      $("warn").textContent = "\u26A0 Se necesitan al menos 2 puntos para graficar.";
+    } else if (showCharts) renderCharts($("charts"), [
       { title: "Temperatura (\xB0C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
       { title: bmp ? "Presi\xF3n (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s) })) }
     ], local ? -(/* @__PURE__ */ new Date()).getTimezoneOffset() : 0);
     $("next").textContent = `siguiente: tv ${samples[samples.length - 1].epochMin}`;
   }
   $("go").addEventListener("click", decode);
+  $("toggle").addEventListener("click", () => {
+    showCharts = !showCharts;
+    $("toggle").textContent = `Gr\xE1ficas: ${showCharts ? "on" : "off"}`;
+    $("toggle").setAttribute("aria-pressed", String(showCharts));
+    decode();
+  });
   $("local").addEventListener("change", decode);
   $("csv").addEventListener(
     "click",

@@ -10,12 +10,14 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const vectorOf = (line: string) =>
   (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => (b.length > a.length ? b : a), "");
 
+let showCharts = true;
 let rows: string[][] = [];
 let header: string[] = [];
 
 function decode() {
   const err = $("err"), tbl = $<HTMLTableElement>("tbl");
   err.textContent = "";
+  $("warn").textContent = "";
   rows = [];
   tbl.hidden = true;
   $("next").textContent = "";
@@ -56,7 +58,9 @@ function decode() {
   tbl.hidden = false;
   $<HTMLButtonElement>("csv").disabled = false;
   const hVal = (s: TvSample) => (bmp ? s.hRaw + BMP_OFFSET_HPA : s.hRaw);
-  renderCharts($("charts"), [
+  if (showCharts && samples.length < 2) {
+    $("warn").textContent = "⚠ Se necesitan al menos 2 puntos para graficar.";
+  } else if (showCharts) renderCharts($("charts"), [
     { title: "Temperatura (°C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
     { title: bmp ? "Presión (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s) })) },
   ], local ? -new Date().getTimezoneOffset() : 0);
@@ -64,6 +68,12 @@ function decode() {
 }
 
 $("go").addEventListener("click", decode);
+$("toggle").addEventListener("click", () => {
+  showCharts = !showCharts;
+  $("toggle").textContent = `Gráficas: ${showCharts ? "on" : "off"}`;
+  $("toggle").setAttribute("aria-pressed", String(showCharts));
+  decode();
+});
 $("local").addEventListener("change", decode);
 $("csv").addEventListener("click", () =>
   navigator.clipboard.writeText([header, ...rows].map((r) => r.join(",")).join("\n")),
