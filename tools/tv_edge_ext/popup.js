@@ -211,13 +211,25 @@
   var showCharts = true;
   var rows = [];
   var header = [];
+  var banner = (id, text = "") => {
+    $(id).textContent = text;
+    $(id).hidden = !text;
+  };
+  function copy(text, btn) {
+    navigator.clipboard.writeText(text);
+    const label = btn.textContent;
+    btn.textContent = "Copiado \u2713";
+    setTimeout(() => btn.textContent = label, 1200);
+  }
   function decode() {
-    const err = $("err"), tbl = $("tbl");
-    err.textContent = "";
-    $("warn").textContent = "";
+    const tbl = $("tbl");
+    banner("err");
+    banner("warn");
+    $("empty").hidden = true;
+    $("info").hidden = true;
     rows = [];
-    tbl.hidden = true;
-    $("next").textContent = "";
+    $("tblwrap").hidden = true;
+    $("nextbox").hidden = true;
     $("charts").replaceChildren();
     $("csv").disabled = true;
     const samples = [];
@@ -232,10 +244,11 @@
       });
     } catch (e) {
       if (!(e instanceof TvParseError)) throw e;
-      err.textContent = e.message;
+      banner("err", e.message);
       return;
     }
-    $("info").textContent = samples.length ? `sensor: ${kind}  registros: ${samples.length}` : "sin datos";
+    $("info").textContent = samples.length ? `${kind} \xB7 ${samples.length} registros` : "sin datos";
+    $("info").hidden = false;
     if (!samples.length) return;
     const bmp = kind === "BMP280", local = $("local").checked;
     header = ["#", "T (\xB0C)", bmp ? "Presi\xF3n (hPa)" : "%RH", "epoch_min", local ? "Local" : "UTC"];
@@ -248,16 +261,17 @@
     ]);
     tbl.tHead.innerHTML = "<tr>" + header.map((h) => `<th>${h}</th>`).join("") + "</tr>";
     tbl.tBodies[0].innerHTML = rows.map((r) => "<tr>" + r.map((c) => `<td>${c}</td>`).join("") + "</tr>").join("");
-    tbl.hidden = false;
+    $("tblwrap").hidden = false;
     $("csv").disabled = false;
     const hVal = (s) => bmp ? s.hRaw + BMP_OFFSET_HPA2 : s.hRaw;
     if (showCharts && samples.length < 2) {
-      $("warn").textContent = "\u26A0 Se necesitan al menos 2 puntos para graficar.";
+      banner("warn", "Se necesitan al menos 2 puntos para graficar.");
     } else if (showCharts) renderCharts($("charts"), [
       { title: "Temperatura (\xB0C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
       { title: bmp ? "Presi\xF3n (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s) })) }
     ], local ? -(/* @__PURE__ */ new Date()).getTimezoneOffset() : 0);
-    $("next").textContent = `siguiente: tv ${samples[samples.length - 1].epochMin}`;
+    $("next").textContent = `tv ${samples[samples.length - 1].epochMin}`;
+    $("nextbox").hidden = false;
   }
   $("go").addEventListener("click", decode);
   $("toggle").addEventListener("click", () => {
@@ -269,6 +283,7 @@
   $("local").addEventListener("change", decode);
   $("csv").addEventListener(
     "click",
-    () => navigator.clipboard.writeText([header, ...rows].map((r) => r.join(",")).join("\n"))
+    () => copy([header, ...rows].map((r) => r.join(",")).join("\n"), $("csv"))
   );
+  $("copynext").addEventListener("click", () => copy($("next").textContent, $("copynext")));
 })();
