@@ -77,7 +77,7 @@ function render() {
   if (showCharts && samples.length < 2) warns.push("Se necesitan al menos 2 puntos para graficar.");
   banner("warn", warns.join("\n"));
 
-  $("info").textContent = `${kind} · ${samples.length} registros`;
+  $("info").textContent = `${kind} · ${samples.length} registro${samples.length === 1 ? "" : "s"}`;
   $("info").hidden = false;
   header = ["#", "T (°C)", bmp ? "Presión (hPa)" : "%RH", "epoch_min", local ? "Local" : "UTC"];
   rows = samples.map((s, i) => [

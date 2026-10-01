@@ -76,7 +76,7 @@ export function renderCharts(host: HTMLElement, panels: Panel[], offsetMin: numb
     const py = (y: number) => top + PH - ((y - lo) / (hi - lo)) * PH;
     ys.push(py);
 
-    el(svg, "text", { x: L, y: top - 6, class: "t-ink" }, p.title);
+    el(svg, "text", { x: L, y: top - 10, class: "t-ink" }, p.title);
     for (const v of ticks) {
       el(svg, "line", { x1: L, x2: W - R, y1: py(v), y2: py(v), class: "grid" });
       el(svg, "text", { x: L - 6, y: py(v) + 3, "text-anchor": "end", class: "t-mute" }, String(v));
@@ -94,13 +94,15 @@ export function renderCharts(host: HTMLElement, panels: Panel[], offsetMin: numb
     }
     const ex = extremes(p.pts);
     if (ex) {
-      const mark = (q: Pt, label: string, dy: number) => {
-        const x = px(q.x), edge = x < L + 34 ? "start" : x > W - R - 34 ? "end" : "middle";
+      // Etiqueta al costado del punto, hacia el interior, para no pisar el título ni el eje X.
+      const mark = (q: Pt, label: string) => {
+        const x = px(q.x), side = x < (L + W - R) / 2 ? 1 : -1;
         el(svg, "circle", { cx: x, cy: py(q.y), r: 4, class: "ext" });
-        el(svg, "text", { x, y: py(q.y) + dy, "text-anchor": edge, class: "t-ink halo" }, `${label} ${q.y.toFixed(1)}`);
+        el(svg, "text", { x: x + side * 8, y: py(q.y) + 4, "text-anchor": side > 0 ? "start" : "end", class: "t-ink halo" },
+          `${label} ${q.y.toFixed(1)}`);
       };
-      mark(ex.max, "máx", -8);
-      mark(ex.min, "mín", 16);
+      mark(ex.max, "máx");
+      mark(ex.min, "mín");
     }
     // ponytail: promedio simple, no ponderado por tiempo; con huecos grandes puede sesgarse.
     const m = mean(p.pts.map((q) => q.y));
