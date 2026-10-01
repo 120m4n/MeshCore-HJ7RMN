@@ -22,3 +22,14 @@ eq(niceTicks(-3.5, 28.1), [-10, 0, 10, 20, 30], "niceTicks cruza cero");
 eq(mean([1, 2, 6]), 3, "mean");
 eq(segments([{ x: 0, y: 1 }, { x: 30, y: 1 }, { x: 90, y: 1 }, { x: 120, y: 1 }]).map((s) => s.length), [2, 2], "segments corta en hueco");
 console.log("ok: chart.ts (niceTicks, mean, segments)");
+
+// tabs.ts: una pestaña por línea válida (vectores BMP280 reales: 1 y 20 registros)
+import { parseLines } from "./tabs.ts";
+const BMP1 = "GABBtFfMIUBj", BMP20 = "GAUBx23tIkBkDADABAABAACAFCBBEAAAEACBECCABACCFADAAA";
+const txt = [BMP1, "", "-", "FAFBx1KKIuA3CCCB", BMP20, v].join("\n");
+let p = parseLines(txt);
+eq(p.tabs.map((t) => [t.line, t.samples.length, t.kind]), [[1, 1, "BMP280"], [5, 20, "BMP280"], [6, 5, "BME280"]], "tabs por línea válida");
+eq([p.errors.length, p.errors[0].startsWith("línea 4:"), p.skipped], [1, true, 0], "error parcial no aborta");
+p = parseLines(txt, 2);
+eq([p.tabs.length, p.skipped], [2, 1], "límite de tabs");
+console.log("ok: tabs.ts (parseLines)");

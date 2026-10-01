@@ -97,6 +97,27 @@
   }
   if ("" === `file://${define_process_argv_default[1]}`) main();
 
+  // tabs.ts
+  var MAX_TABS = 6;
+  var vectorOf = (line) => (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
+  function parseLines(text, max = MAX_TABS) {
+    const tabs2 = [], errors2 = [];
+    let skipped2 = 0;
+    text.split("\n").forEach((l, i) => {
+      if (!l.trim()) return;
+      try {
+        const r = decodeVector(vectorOf(l));
+        if (!r.samples.length) return;
+        if (tabs2.length < max) tabs2.push({ line: i + 1, ...r });
+        else skipped2++;
+      } catch (e) {
+        if (!(e instanceof TvParseError)) throw e;
+        errors2.push(`l\xEDnea ${i + 1}: ${e.message}`);
+      }
+    });
+    return { tabs: tabs2, errors: errors2, skipped: skipped2 };
+  }
+
   // chart.ts
   var SLOT_MIN = 30;
   var mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -207,8 +228,11 @@
   // popup.ts
   var BMP_OFFSET_HPA2 = 800;
   var $ = (id) => document.getElementById(id);
-  var vectorOf = (line) => (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
   var showCharts = true;
+  var tabs = [];
+  var active = 0;
+  var errors = [];
+  var skipped = 0;
   var rows = [];
   var header = [];
   var banner = (id, text = "") => {
@@ -222,65 +246,79 @@
     setTimeout(() => btn.textContent = label, 1200);
   }
   function decode() {
-    const tbl = $("tbl");
-    banner("err");
-    banner("warn");
+    ({ tabs, errors, skipped } = parseLines($("in").value));
+    active = 0;
     $("empty").hidden = true;
-    $("info").hidden = true;
-    rows = [];
-    $("tblwrap").hidden = true;
-    $("nextbox").hidden = true;
+    render();
+  }
+  function render() {
+    const bar = $("tabs");
+    bar.replaceChildren();
     $("charts").replaceChildren();
+    rows = [];
+    $("info").hidden = true;
+    $("panel").hidden = true;
     $("csv").disabled = true;
-    const samples = [];
-    let kind = "";
-    const lines = $("in").value.split("\n").filter((l) => l.trim());
-    try {
-      lines.forEach((line, i) => {
-        const r = decodeVector(vectorOf(line));
-        kind ||= r.kind;
-        if (r.kind && r.kind !== kind) throw new TvParseError(`l\xEDnea ${i + 1}: sensor ${r.kind} distinto de ${kind}`);
-        samples.push(...r.samples);
-      });
-    } catch (e) {
-      if (!(e instanceof TvParseError)) throw e;
-      banner("err", e.message);
-      return;
-    }
-    $("info").textContent = samples.length ? `${kind} \xB7 ${samples.length} registros` : "sin datos";
-    $("info").hidden = false;
-    if (!samples.length) return;
+    const warns = [];
+    if (skipped) warns.push(`Se muestran ${tabs.length} de ${tabs.length + skipped} l\xEDneas v\xE1lidas (m\xE1x. ${MAX_TABS}).`);
+    if (!tabs.length && !errors.length) warns.push("No hay l\xEDneas v\xE1lidas con datos.");
+    banner("err", errors.join("\n"));
+    if (!tabs.length) return banner("warn", warns.join("\n"));
+    bar.hidden = tabs.length < 2;
+    tabs.forEach((t, i) => {
+      const b = document.createElement("button");
+      b.role = "tab";
+      b.textContent = `L${t.line} \xB7 ${t.samples.length} reg`;
+      b.setAttribute("aria-selected", String(i === active));
+      b.tabIndex = i === active ? 0 : -1;
+      b.addEventListener("click", () => select(i));
+      bar.appendChild(b);
+    });
+    const { kind, samples } = tabs[active];
     const bmp = kind === "BMP280", local = $("local").checked;
+    const hVal = (h) => bmp ? h + BMP_OFFSET_HPA2 : h;
+    if (showCharts && samples.length < 2) warns.push("Se necesitan al menos 2 puntos para graficar.");
+    banner("warn", warns.join("\n"));
+    $("info").textContent = `${kind} \xB7 ${samples.length} registros`;
+    $("info").hidden = false;
     header = ["#", "T (\xB0C)", bmp ? "Presi\xF3n (hPa)" : "%RH", "epoch_min", local ? "Local" : "UTC"];
     rows = samples.map((s, i) => [
       String(i),
       s.tempC.toFixed(1),
-      String(bmp ? s.hRaw + BMP_OFFSET_HPA2 : s.hRaw),
+      String(hVal(s.hRaw)),
       String(s.epochMin),
       local ? s.date.toLocaleString("sv-SE") : s.date.toISOString().replace("T", " ").replace(".000Z", "Z")
     ]);
+    const tbl = $("tbl");
     tbl.tHead.innerHTML = "<tr>" + header.map((h) => `<th>${h}</th>`).join("") + "</tr>";
     tbl.tBodies[0].innerHTML = rows.map((r) => "<tr>" + r.map((c) => `<td>${c}</td>`).join("") + "</tr>").join("");
-    $("tblwrap").hidden = false;
-    $("csv").disabled = false;
-    const hVal = (s) => bmp ? s.hRaw + BMP_OFFSET_HPA2 : s.hRaw;
-    if (showCharts && samples.length < 2) {
-      banner("warn", "Se necesitan al menos 2 puntos para graficar.");
-    } else if (showCharts) renderCharts($("charts"), [
-      { title: "Temperatura (\xB0C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
-      { title: bmp ? "Presi\xF3n (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s) })) }
-    ], local ? -(/* @__PURE__ */ new Date()).getTimezoneOffset() : 0);
+    if (showCharts && samples.length >= 2) {
+      renderCharts($("charts"), [
+        { title: "Temperatura (\xB0C)", pts: samples.map((s) => ({ x: s.epochMin, y: s.tempC })) },
+        { title: bmp ? "Presi\xF3n (hPa)" : "Humedad (%RH)", pts: samples.map((s) => ({ x: s.epochMin, y: hVal(s.hRaw) })) }
+      ], local ? -(/* @__PURE__ */ new Date()).getTimezoneOffset() : 0);
+    }
     $("next").textContent = `tv ${samples[samples.length - 1].epochMin}`;
-    $("nextbox").hidden = false;
+    $("panel").hidden = false;
+    $("csv").disabled = false;
   }
+  function select(i, focus = false) {
+    active = i;
+    render();
+    if (focus) $("tabs").children[i].focus();
+  }
+  $("tabs").addEventListener("keydown", (e) => {
+    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (d) select((active + d + tabs.length) % tabs.length, true);
+  });
   $("go").addEventListener("click", decode);
   $("toggle").addEventListener("click", () => {
     showCharts = !showCharts;
     $("toggle").textContent = `Gr\xE1ficas: ${showCharts ? "on" : "off"}`;
     $("toggle").setAttribute("aria-pressed", String(showCharts));
-    decode();
+    render();
   });
-  $("local").addEventListener("change", decode);
+  $("local").addEventListener("change", render);
   $("csv").addEventListener(
     "click",
     () => copy([header, ...rows].map((r) => r.join(",")).join("\n"), $("csv"))
