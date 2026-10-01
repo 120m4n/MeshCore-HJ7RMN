@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MeshCore TV Decoder",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "Decodifica vectores v1 del comando `tv 0` de MeshCore.",
   "action": { "default_popup": "popup.html", "default_title": "TV decoder" }
 }

@@ -71,6 +71,10 @@
   tbody tr:nth-child(even) { background: var(--grid); }
   tbody tr:hover { background: var(--series-tint); }
 
+  #panel { display: flex; flex-direction: column; gap: var(--gap); }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tabs button { white-space: nowrap; border-radius: 99px; padding: 3px 12px; }
+  .tabs button[aria-selected="true"] { background: var(--series-tint); border-color: var(--series); font-weight: 600; }
   .next { display: flex; align-items: center; gap: 8px; }
   .next span { color: var(--ink-2); }
   .next code { font: 13px ui-monospace, monospace; padding: 2px 8px; border-radius: 4px; background: var(--bg); }
@@ -94,11 +98,14 @@
 <div id="empty" class="empty">Pega la salida de <code>tv 0</code> y pulsa Decodificar.</div>
 <div id="err" class="banner err" role="alert" hidden></div>
 <div id="warn" class="banner warn" hidden></div>
-<section id="charts" class="card"></section>
-<section id="tblwrap" class="card tbl-wrap" hidden><table id="tbl"><thead></thead><tbody></tbody></table></section>
-<section id="nextbox" class="card next" hidden>
-  <span>Siguiente consulta</span><code id="next"></code><button id="copynext">Copiar</button>
-</section>
+<div id="tabs" class="tabs" role="tablist" aria-label="Líneas decodificadas" hidden></div>
+<div id="panel" role="tabpanel" hidden>
+  <section id="charts" class="card"></section>
+  <section class="card tbl-wrap"><table id="tbl"><thead></thead><tbody></tbody></table></section>
+  <section class="card next">
+    <span>Siguiente consulta</span><code id="next"></code><button id="copynext">Copiar</button>
+  </section>
+</div>
 <script src="popup.js"></script>
 </body>
 </html>
