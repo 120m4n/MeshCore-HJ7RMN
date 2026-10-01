@@ -189,7 +189,7 @@
       const lo = ticks[0], hi = ticks[ticks.length - 1];
       const py = (y) => top + PH - (y - lo) / (hi - lo) * PH;
       ys.push(py);
-      el(svg, "text", { x: L, y: top - 6, class: "t-ink" }, p.title);
+      el(svg, "text", { x: L, y: top - 10, class: "t-ink" }, p.title);
       for (const v of ticks) {
         el(svg, "line", { x1: L, x2: W - R, y1: py(v), y2: py(v), class: "grid" });
         el(svg, "text", { x: L - 6, y: py(v) + 3, "text-anchor": "end", class: "t-mute" }, String(v));
@@ -205,13 +205,18 @@
       }
       const ex = extremes(p.pts);
       if (ex) {
-        const mark = (q, label, dy) => {
-          const x = px(q.x), edge = x < L + 34 ? "start" : x > W - R - 34 ? "end" : "middle";
+        const mark = (q, label) => {
+          const x = px(q.x), side = x < (L + W - R) / 2 ? 1 : -1;
           el(svg, "circle", { cx: x, cy: py(q.y), r: 4, class: "ext" });
-          el(svg, "text", { x, y: py(q.y) + dy, "text-anchor": edge, class: "t-ink halo" }, `${label} ${q.y.toFixed(1)}`);
+          el(
+            svg,
+            "text",
+            { x: x + side * 8, y: py(q.y) + 4, "text-anchor": side > 0 ? "start" : "end", class: "t-ink halo" },
+            `${label} ${q.y.toFixed(1)}`
+          );
         };
-        mark(ex.max, "m\xE1x", -8);
-        mark(ex.min, "m\xEDn", 16);
+        mark(ex.max, "m\xE1x");
+        mark(ex.min, "m\xEDn");
       }
       const m = mean(p.pts.map((q) => q.y));
       el(svg, "line", { x1: L, x2: W - R, y1: py(m), y2: py(m), class: "mean" });
@@ -317,7 +322,7 @@
     const hVal = (h) => bmp ? h + BMP_OFFSET_HPA2 : h;
     if (showCharts && samples.length < 2) warns.push("Se necesitan al menos 2 puntos para graficar.");
     banner("warn", warns.join("\n"));
-    $("info").textContent = `${kind} \xB7 ${samples.length} registros`;
+    $("info").textContent = `${kind} \xB7 ${samples.length} registro${samples.length === 1 ? "" : "s"}`;
     $("info").hidden = false;
     header = ["#", "T (\xB0C)", bmp ? "Presi\xF3n (hPa)" : "%RH", "epoch_min", local ? "Local" : "UTC"];
     rows = samples.map((s, i) => [
