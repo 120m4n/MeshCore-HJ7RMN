@@ -46,7 +46,7 @@
         slot += take(1);
         continue;
       }
-      if (c === "~") {
+      if (c === "~" || c === "!") {
         pos++;
         t = unzigzag(take(2));
         h = take(2);
@@ -69,7 +69,7 @@
   function main() {
     const vector = define_process_argv_default[2];
     if (vector === void 0 || vector === "-h" || vector === "--help") {
-      console.log("Uso: node tv_decoder.ts '<vector>'   (ej. 'FAFBx1KKIuA3CCCBDC.C~BFA8')");
+      console.log("Uso: node tv_decoder.ts '<vector>'   (ej. 'FAFBx1KKIuA3CCCBDC.C!BFA8')");
       process.exit(vector === void 0 ? 1 : 0);
     }
     let res;
@@ -99,7 +99,7 @@
 
   // tabs.ts
   var MAX_TABS = 6;
-  var vectorOf = (line) => (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
+  var vectorOf = (line) => (line.match(/[A-Za-z0-9_.!~-]+/g) ?? []).reduce((a, b) => b.length > a.length ? b : a, "");
   function mergeTabs(tabs2) {
     if (tabs2.length < 2 || tabs2.some((t) => t.kind !== tabs2[0].kind)) return null;
     const byEpoch = /* @__PURE__ */ new Map();

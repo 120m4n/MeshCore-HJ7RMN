@@ -48,7 +48,7 @@ diagnóstico.
 | Comando | Respuesta | Notas |
 | --- | --- | --- |
 | `tv sensor` | `BME280`, `BMP280` o `none` | Diagnóstico: qué detectó el firmware al boot. |
-| `tv <since>` | Un vector v1 (ej. `FAFBx1KKIuA3CCCBDC.C~BFA8`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
+| `tv <since>` | Un vector v1 (ej. `FAFBx1KKIuA3CCCBDC.C!BFA8`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
 | `clock` | Fecha/hora UTC legible (`HH:MM - D/M/AAAA UTC`) | **No** da epoch en minutos crudo — ver la receta de uso más abajo. |
 
 El reply de `tv` está limitado a `TV_REPLY_CAP = 150` bytes (el buffer de
@@ -61,7 +61,7 @@ separadores. Pensado para enlaces débiles: menos bytes = menos airtime y
 menos round trips.
 
 ```
-V NN EEEEE TT HH | dT dH | .k | ~TTHH | ...
+V NN EEEEE TT HH | dT dH | .k | !TTHH | ...
 ```
 
 | Token | Chars | Contenido |
@@ -73,7 +73,7 @@ V NN EEEEE TT HH | dT dH | .k | ~TTHH | ...
 | `HH` | 2 | campo `H` del anchor (0-255) |
 | `dT dH` | 2 | registro en el slot siguiente: 1 char zigzag c/u (−32..+31), delta vs el registro **anterior** |
 | `.k` | 2 | saltar `k` slots vacíos (1-63; se repite si el hueco es mayor) |
-| `~TTHH` | 5 | registro en el slot siguiente con T/H absolutos (el delta no entraba en 1 char) |
+| `!TTHH` | 5 | registro en el slot siguiente con T/H absolutos (el delta no entraba en 1 char) |
 
 - **Signos**: zigzag (`0,−1,1,−2,2… → 0,1,2,3,4…`), 1 bit por valor.
 - **Tiempo implícito**: después del anchor, cada registro es el inicio de su
@@ -91,7 +91,7 @@ El reply está limitado a 150 bytes (149 útiles + NUL): header de 12 chars
 + 2 por registro → **hasta 69 registros por página** con deltas chicos. El
 intervalo de 30 min se eligió para que el día completo (48 registros = 106
 bytes) salga en **1 sola consulta**, con 43 bytes de margen para ~14 saltos
-grandes (`~`, +3 c/u) o huecos (`.k`, +2 c/u). Con 20 min (72 registros) ya
+grandes (`!`, +3 c/u) o huecos (`.k`, +2 c/u). Con 20 min (72 registros) ya
 no entraba; con 24 min entraba con solo 19 bytes de margen y timestamps
 desalineados de la hora.
 

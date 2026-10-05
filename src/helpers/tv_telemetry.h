@@ -58,13 +58,13 @@ inline void sample_tick(uint32_t now_min) {
 }
 
 // Formato v1 (base64url, 6 bits por char, sin separadores):
-//   V NN EEEEE TT HH  |  dT dH  |  .k  |  ~TTHH
+//   V NN EEEEE TT HH  |  dT dH  |  .k  |  !TTHH
 //   V     = (versión 1 << 2) | sensor_kind_id()  -> 'F' BME280, 'G' BMP280
 //   NN    = cantidad de registros (detecta truncamiento)
 //   EEEEE = epoch_min exacto del anchor; TT = zigzag(T décimas); HH = H
 //   dT dH = 1 char zigzag c/u (-32..31), delta vs registro ANTERIOR, slot siguiente
 //   .k    = saltar k slots vacíos (1..63; se repite si el hueco es mayor)
-//   ~TTHH = registro con T/H absolutos (el delta no entraba en 1 char)
+//   !TTHH = registro con T/H absolutos (el delta no entraba en 1 char)
 // El tiempo de cada registro después del anchor es implícito: inicio de su
 // bucket de 30 min. Por eso `since` se compara por bucket, no por minuto: el
 // backend puede mandar el epoch decodificado del último registro tal cual.
@@ -112,7 +112,7 @@ inline size_t encode(uint32_t now_min, uint32_t since, char* out, size_t cap) {
       }
       const int dt = r.t - pt, dh = r.h - ph;
       if (dt < -32 || dt > 31 || dh < -32 || dh > 31) {
-        buf[len++] = '~';
+        buf[len++] = '!';
         len += put64(buf + len, zigzag(r.t), 2);
         len += put64(buf + len, r.h, 2);
       } else {

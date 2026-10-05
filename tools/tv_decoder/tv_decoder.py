@@ -75,7 +75,7 @@ def decode_vector(s: str) -> tuple[str, list[TvSample]]:
             pos += 1
             slot += take(1)
             continue
-        if c == "~":
+        if c in "~!":
             pos += 1
             t, h = unzigzag(take(2)), take(2)
         else:
@@ -96,7 +96,7 @@ def decode_vector(s: str) -> tuple[str, list[TvSample]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Decodifica un vector tv (v1) de MeshCore.")
-    parser.add_argument("vector", help='vector tv, ej. "FAFBx1KKIuA3CCCBDC.C~BFA8"')
+    parser.add_argument("vector", help='vector tv, ej. "FAFBx1KKIuA3CCCBDC.C!BFA8"')
     args = parser.parse_args()
 
     try:

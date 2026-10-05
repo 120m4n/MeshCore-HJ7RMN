@@ -7,9 +7,9 @@ export const MAX_TABS = 6;
 export interface Tab { line: number; kind: string; samples: TvSample[] } // line = nº de línea (1-based)
 
 // Una línea = una página. Tolera prefijos tipo "-> ": toma el token más largo
-// del alfabeto del vector (base64url + "." y "~").
+// del alfabeto del vector (base64url + "." y "!").
 const vectorOf = (line: string) =>
-  (line.match(/[A-Za-z0-9_.~-]+/g) ?? []).reduce((a, b) => (b.length > a.length ? b : a), "");
+  (line.match(/[A-Za-z0-9_.!~-]+/g) ?? []).reduce((a, b) => (b.length > a.length ? b : a), "");
 
 // Pestaña «Todas»: junta las líneas del mismo sensor, ordenadas por epoch y sin duplicados
 // (las páginas tv 0 / tv N pueden solaparse). null si hay <2 pestañas o sensores mezclados.
