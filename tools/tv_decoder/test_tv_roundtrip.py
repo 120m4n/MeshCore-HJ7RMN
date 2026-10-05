@@ -70,14 +70,14 @@ def main():
 
         # 2) negativos, anchor fuera de bucket, huecos, saltos grandes, BMP280
         # ponytail: el timestamp de registros no-anchor es el inicio del bucket (pierde minutos dentro del bucket)
-        # y deltas en el borde: -33/+32 van con '~', -32/+31 en 1 char
+        # y deltas en el borde: -33/+32 van con '!', -32/+31 en 1 char
         want = [(E0 + 7, -35, 200), (E0 + I, -68, 198), (E0 + I * 3, 500, 198),
                 (E0 + I * 4, 532, 198), (E0 + I * 40, 533, 10), (E0 + I * 44, -400, 255),
                 (E0 + I * 45, -432, 223), (E0 + I * 46, -401, 254)]
         puts = "".join(f"put {e} {t} {h}\n" for e, t, h in want)
         pages, got = fetch_all(exe, puts, E0 + I * 46, kind=2)
         assert got == [(e, t, h, "BMP280") for e, t, h in want], got
-        assert "." in pages[0] and "~" in pages[0], pages
+        assert "." in pages[0] and "!" in pages[0], pages
 
         # 3) vacío, formato viejo y truncamiento
         assert run(exe, f"enc {now} 0\n") == ["-"]

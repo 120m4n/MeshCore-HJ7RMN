@@ -66,7 +66,7 @@ export function decodeVector(s: string): { kind: string; samples: TvSample[] } {
       slot += take(1);
       continue;
     }
-    if (c === "~") {
+    if (c === "~" || c === "!") {
       pos++;
       t = unzigzag(take(2));
       h = take(2);
@@ -92,7 +92,7 @@ export function decodeVector(s: string): { kind: string; samples: TvSample[] } {
 function main() {
   const vector = process.argv[2];
   if (vector === undefined || vector === "-h" || vector === "--help") {
-    console.log('Uso: node tv_decoder.ts \'<vector>\'   (ej. \'FAFBx1KKIuA3CCCBDC.C~BFA8\')');
+    console.log('Uso: node tv_decoder.ts \'<vector>\'   (ej. \'FAFBx1KKIuA3CCCBDC.C!BFA8\')');
     process.exit(vector === undefined ? 1 : 0);
   }
 

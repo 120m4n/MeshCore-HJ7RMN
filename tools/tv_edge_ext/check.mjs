@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { decodeVector } from "../tv_decoder/tv_decoder.ts";
 
-const v = "FAFBx1KKIuA3CCCBDC.C~BFA8";
+const v = "FAFBx1KKIuA3CCCBDC.C!BFA8";
 const { kind, samples } = decodeVector(v);
 const py = execFileSync("python3", [new URL("../tv_decoder/tv_decoder.py", import.meta.url).pathname, v], { encoding: "utf8" });
 const pyEpochs = [...py.matchAll(/^\s*\d+\s+\S+\s+\S+\s+(\d+)\s/gm)].map((m) => +m[1]);
