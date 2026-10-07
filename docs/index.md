@@ -9,6 +9,7 @@ Below are a few quick start guides.
 - [Companion Protocol](./companion_protocol.md)
 - [Packet Format](./packet_format.md)
 - [QR Codes](./qr_codes.md)
+- [Tips and Tricks](./tips_and_tricks.md)
 
 If you find a mistake in any of our documentation, or find something is missing, please feel free to open a pull request for us to review.
 
