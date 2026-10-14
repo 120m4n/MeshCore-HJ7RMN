@@ -1,0 +1,18 @@
+# Capturas de campo, 2026-10-14. Pinger XIAO nRF52840 + Wio-SX1262, fw 0.1.0, preset 915.8/250/10/5, txp 22,
+# antena omni, repetidor de hash 4F muy cerca (RSSI ≈ -35 dBm). Los ecos salen de `SET raw=1` + `PING 12`;
+# las otras tramas, de `MON on` (mensajes directos cifrados; no se incluyen mensajes del canal Public ni adverts).
+# rssi_dn y snr_dn_q son metadatos de la radio receptora (informativos).
+260125868BE54B00000000004F	{"kind":"echo","tag":"4BE58B86","hash":"4F","snr_up_q":37,"rssi_dn":-35.0,"snr_dn_q":35}
+260126C23AD07F00000000004F	{"kind":"echo","tag":"7FD03AC2","hash":"4F","snr_up_q":38,"rssi_dn":-35.0,"snr_dn_q":35}
+260128CFE9EB7C00000000004F	{"kind":"echo","tag":"7CEBE9CF","hash":"4F","snr_up_q":40,"rssi_dn":-34.0,"snr_dn_q":34}
+260122A9218FBF00000000004F	{"kind":"echo","tag":"BF8F21A9","hash":"4F","snr_up_q":34,"rssi_dn":-35.0,"snr_dn_q":36}
+2601258A3DB8B100000000004F	{"kind":"echo","tag":"B1B83D8A","hash":"4F","snr_up_q":37,"rssi_dn":-35.0,"snr_dn_q":37}
+26012561338FFA00000000004F	{"kind":"echo","tag":"FA8F3361","hash":"4F","snr_up_q":37,"rssi_dn":-34.0,"snr_dn_q":36}
+26012865600D2B00000000004F	{"kind":"echo","tag":"2B0D6065","hash":"4F","snr_up_q":40,"rssi_dn":-34.0,"snr_dn_q":37}
+2601288803154C00000000004F	{"kind":"echo","tag":"4C150388","hash":"4F","snr_up_q":40,"rssi_dn":-35.0,"snr_dn_q":36}
+260127A982F4B500000000004F	{"kind":"echo","tag":"B5F482A9","hash":"4F","snr_up_q":39,"rssi_dn":-35.0,"snr_dn_q":36}
+260123E29ECC4500000000004F	{"kind":"echo","tag":"45CC9EE2","hash":"4F","snr_up_q":35,"rssi_dn":-36.0,"snr_dn_q":35}
+260123A8D0432900000000004F	{"kind":"echo","tag":"2943D0A8","hash":"4F","snr_up_q":35,"rssi_dn":-36.0,"snr_dn_q":33}
+26012D95D8995B00000000004F	{"kind":"echo","tag":"5B99D895","hash":"4F","snr_up_q":45,"rssi_dn":-35.0,"snr_dn_q":35}
+0A008CA1DAE42F31901D89FE9041A01CD41407312528	{"kind":"other","route":2,"type":2,"rssi_dn":-33.0,"snr_dn_q":35}
+0A00A18C25BA1BC3E2AE2A9DD19AF08BFA9971C811CB9C8ADF7D955EF4430E2C2E6C970410F6	{"kind":"other","route":2,"type":2,"rssi_dn":-31.0,"snr_dn_q":37}
