@@ -25,14 +25,18 @@ done
 for f in "$HERE"/tracecore/src/*.cpp; do
   $CXX $FLAGS -c "$f" -o "$OUT/tc_$(basename "$f" .cpp).o" &
 done
+for f in "$HERE"/tests/support/*.cpp; do   # RepeaterModel, Fixtures, Hex...
+  [ -f "$f" ] && $CXX $FLAGS -c "$f" -o "$OUT/sup_$(basename "$f" .cpp).o" &
+done
 wait
 
+export MESHCORE_ROOT="$ROOT" PINGER_DIR="$HERE"   # los usa test_upstream_guard
 suites=${*:-$(cd "$HERE/tests" && ls -d test_*)}
 for name in $suites; do
   d="$HERE/tests/$name"
   if [ ! -d "$d" ]; then echo "no such suite: $name" >&2; exit 2; fi
   # Cada suite compila y corre en paralelo; la salida se imprime en orden al final.
-  ( $CXX $FLAGS "$d"/*.cpp "$OUT"/core_*.o "$OUT"/tc_*.o -o "$OUT/$name" && "$OUT/$name" ) \
+  ( $CXX $FLAGS "$d"/*.cpp "$OUT"/core_*.o "$OUT"/tc_*.o "$OUT"/sup_*.o -o "$OUT/$name" && "$OUT/$name" ) \
     > "$OUT/$name.log" 2>&1 && echo 0 > "$OUT/$name.rc" || echo 1 > "$OUT/$name.rc" &
 done
 wait
