@@ -4,8 +4,10 @@ Emite una trama `TRACE` DIRECT de un salto hacia un repetidor y mide el SNR de s
 
 ## Compilar y flashear
 
+Guía completa (requisitos, verificación por serie y BLE, problemas frecuentes): [FLASHING.md](FLASHING.md).
+
 ```bash
-pio run -e Xiao_nrf52_trace_pinger -t upload      # doble reset del XIAO si pide el bootloader UF2
+pio run -e Xiao_nrf52_trace_pinger -t upload      # doble reset del XIAO si no entra en el bootloader
 pio device monitor -b 115200
 ```
 
