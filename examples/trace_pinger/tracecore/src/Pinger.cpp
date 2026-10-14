@@ -37,7 +37,8 @@ void Pinger::emitBoot(bool cfg_reset) {
   out_.line(buf_, formatCfg(buf_, sizeof buf_, cfg_));
 }
 
-Action Pinger::onCommand(std::string_view line, uint32_t now) {
+Action Pinger::onCommand(std::string_view line, uint32_t now, Origin origin) {
+  cur_origin_ = origin;
   const Command c = parseCommand(line);
   switch (c.kind) {
     case Command::Kind::Empty: return {};
@@ -91,6 +92,17 @@ Action Pinger::doMon(bool on) {
 
 Action Pinger::doStop() {
   say("#OK stop");
+  return stopRun();
+}
+
+Action Pinger::onTransportLost(Origin origin) {
+  if (!inFlight() || run_origin_ != origin) return {};
+  if (!run_go_ && run_total_ <= 1) return {};   // un ping suelto termina solo
+  if (origin == Origin::Ble) say("#WARN ble_lost_stop");
+  return stopRun();
+}
+
+Action Pinger::stopRun() {
   if (state_ == State::WaitSend) return endRun();
   if (state_ == State::TxPending || state_ == State::RxWait) stop_req_ = true;  // el ping en curso termina
   return {};
@@ -103,6 +115,7 @@ Action Pinger::startRun(uint16_t count, bool summary, bool go, uint32_t now) {
   run_total_ = count;
   run_done_ = run_ok_ = run_to_ = run_busy_ = samples_ = 0;
   run_go_ = go;
+  run_origin_ = cur_origin_;
   run_summary_ = summary;
   stop_req_ = false;
   state_ = State::WaitSend;

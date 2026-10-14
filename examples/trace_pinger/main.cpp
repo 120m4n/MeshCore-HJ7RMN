@@ -7,7 +7,10 @@
 
 #include <string_view>
 
+#include "BleTransport.h"
+#include "CompositeSink.h"
 #include "tracecore/Airtime.h"
+#include "tracecore/LineAssembler.h"
 #include "tracecore/LineCodec.h"
 #include "tracecore/Pinger.h"
 
@@ -62,13 +65,13 @@ bool cfgSave(const PingerConfig& c) {
 }
 
 HwRng rng;
-UsbSink sink;
+UsbSink usb;
+BleTransport ble;
+CompositeSink sink(usb, ble);   // los eventos salen por Serial y por BLE
 Pinger* pinger = nullptr;
 bool tx_wait = false;
 uint32_t tx_t0 = 0;
-char line_buf[kMaxLine];
-size_t line_len = 0;
-bool line_overflow = false;
+LineAssembler serialLines;
 
 void applyRadio(const RadioConfig& r) {
   radio_driver.setParams(r.freqMhz(), r.bwKhz(), r.sf, r.cr);
@@ -106,18 +109,20 @@ void exec(Action a) {
 
 void pollSerial() {
   while (Serial.available()) {
-    const char c = (char)Serial.read();
-    if (c == '\n') {
-      if (line_overflow) sink.line("!ERR syntax", 11);
-      else exec(pinger->onCommand(std::string_view(line_buf, line_len), millis()));
-      line_len = 0;
-      line_overflow = false;
-    } else if (line_len < sizeof line_buf - 1) {
-      line_buf[line_len++] = c;
-    } else {
-      line_overflow = true;
+    switch (serialLines.push((uint8_t)Serial.read())) {
+      case LineAssembler::Result::Line:
+        exec(pinger->onCommand(std::string_view(serialLines.line(), serialLines.length()), millis(), Origin::Serial));
+        break;
+      case LineAssembler::Result::Overflow: sink.line("!ERR syntax", 11); break;
+      default: break;
     }
   }
+}
+
+void pollBle() {
+  ble.poll([](std::string_view l) { exec(pinger->onCommand(l, millis(), Origin::Ble)); },
+           []() { sink.line("!ERR syntax", 11); });
+  if (ble.takeDisconnected()) exec(pinger->onTransportLost(Origin::Ble));   // FR-005: detiene GO/ráfagas de BLE
 }
 
 }  // namespace
@@ -130,6 +135,7 @@ void setup() {
   radio_driver.begin();
   randomSeed(radio_driver.getRngSeed());
   InternalFS.begin();
+  ble.begin();
 
   Serial.begin(115200);
   const uint32_t t0 = millis();
@@ -148,6 +154,7 @@ void setup() {
 
 void loop() {
   pollSerial();
+  pollBle();
 
   if (tx_wait) {
     if (radio_driver.isSendComplete()) {

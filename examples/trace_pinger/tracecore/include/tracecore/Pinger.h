@@ -12,6 +12,9 @@ namespace tracecore {
 
 constexpr const char* kFwVersion = "0.1.0";
 
+// Por dónde entró un comando; solo sirve para detener lo que inició un transporte que se pierde.
+enum class Origin : uint8_t { Serial, Ble };
+
 struct Rng {
   virtual ~Rng() = default;
   virtual uint32_t next() = 0;
@@ -43,7 +46,9 @@ class Pinger {
   Pinger(const PingerConfig& cfg, Rng& rng, LineSink& out, uint32_t device_id);
 
   void emitBoot(bool cfg_reset);  // #HELLO, (#WARN cfg_reset), #CFG
-  Action onCommand(std::string_view line, uint32_t now);
+  Action onCommand(std::string_view line, uint32_t now, Origin origin = Origin::Serial);
+  // El transporte `origin` se perdió: si `GO` o una ráfaga venían de él, se detienen (Constitución II).
+  Action onTransportLost(Origin origin);
   Action onTxDone(uint32_t now, bool ok);
   Action onChannelBusy(uint32_t now);
   Action onRx(const uint8_t* b, size_t n, float rssi, float snr, uint32_t now);
@@ -67,6 +72,7 @@ class Pinger {
   Action doSet(const char* key, const char* val);
   Action doMon(bool on);
   Action doStop();
+  Action stopRun();
   Action startRun(uint16_t count, bool summary, bool go, uint32_t now);
   Action tryBegin(uint32_t now);
   Action finishWith(Status st, uint32_t now);
@@ -84,6 +90,7 @@ class Pinger {
   // ráfaga / modo continuo
   uint16_t run_total_ = 0, run_done_ = 0, run_ok_ = 0, run_to_ = 0, run_busy_ = 0;
   bool run_go_ = false, run_summary_ = false, stop_req_ = false;
+  Origin cur_origin_ = Origin::Serial, run_origin_ = Origin::Serial;
   int32_t up_c_[kMaxBurst], dn_c_[kMaxBurst], rssi_d_[kMaxBurst];
   uint16_t samples_ = 0;
 
