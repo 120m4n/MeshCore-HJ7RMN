@@ -34,7 +34,7 @@ struct Entry {
   std::string where;    // "archivo:línea", para mensajes
 };
 
-// Lee un archivo de fixtures. Ignora líneas vacías y las que empiezan con '#'.
+// Lee un archivo de fixtures. Ignora líneas vacías y comentarios (`# texto` o `#` solo; `#HELLO` no lo es).
 // Una línea sin TAB+JSON, o con JSON inválido, se añade a `errors` (no se aceptan fixtures sin expectativa).
 bool readFixtureFile(const std::string& path, std::vector<Entry>& out, std::vector<std::string>& errors);
 

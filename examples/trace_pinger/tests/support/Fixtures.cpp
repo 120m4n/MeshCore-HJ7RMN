@@ -103,7 +103,9 @@ bool readFixtureFile(const std::string& path, std::vector<Entry>& out, std::vect
     n++;
     if (!line.empty() && line.back() == '\r') line.pop_back();
     size_t a = line.find_first_not_of(" \t");
-    if (a == std::string::npos || line[a] == '#') continue;
+    // Comentario: '#' solo o seguido de espacio. `#HELLO`, `#OK`, `#WARN` son líneas del protocolo, no comentarios.
+    const bool comment = a != std::string::npos && line[a] == '#' && (a + 1 == line.size() || line[a + 1] == ' ' || line[a + 1] == '\t');
+    if (a == std::string::npos || comment) continue;
     const std::string where = path + ":" + std::to_string(n);
     const size_t tab = line.find('\t');
     if (tab == std::string::npos || line.find_first_not_of(" \t", tab) == std::string::npos) {

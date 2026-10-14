@@ -1,0 +1,9 @@
+# Líneas P (resultado de ping). JSON = resultado del parseo; snr en dB, rssi en dBm.
+# Formato: <línea>\t<json>  (specs/002.../contracts/fixture-format.md)
+P,17,78563412,ok,412,-6.25,-4.50,-108.0,1	{"type":"P","seq":17,"tag":"78563412","status":"ok","rtt_ms":412,"snr_up":-6.25,"snr_dn":-4.5,"rssi_dn":-108.0,"n_resp":1}
+P,18,0A1B2C3D,timeout,,,,,0	{"type":"P","seq":18,"tag":"0A1B2C3D","status":"timeout","n_resp":0}
+P,19,0000000A,busy,,,,,0	{"type":"P","seq":19,"tag":"0000000A","status":"busy","n_resp":0}
+P,20,FFFFFFFF,txerr,,,,,0	{"type":"P","seq":20,"tag":"FFFFFFFF","status":"txerr","n_resp":0}
+P,21,11111111,ok,224,+10.00,+8.50,-38.0,1	{"type":"P","seq":21,"tag":"11111111","status":"ok","rtt_ms":224,"snr_up":10.0,"snr_dn":8.5,"rssi_dn":-38.0,"n_resp":1}
+P,22,2B0D6065,ok,342,+0.00,+0.25,-36.5,2	{"type":"P","seq":22,"tag":"2B0D6065","status":"ok","rtt_ms":342,"snr_up":0.0,"snr_dn":0.25,"rssi_dn":-36.5,"n_resp":2}
+P,4294967295,00000001,ok,0,-32.00,+31.75,-120.0,1	{"type":"P","seq":4294967295,"tag":"00000001","status":"ok","rtt_ms":0,"snr_up":-32.0,"snr_dn":31.75,"rssi_dn":-120.0,"n_resp":1}
