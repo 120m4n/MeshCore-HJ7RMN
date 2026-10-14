@@ -63,6 +63,15 @@ TEST(FixtureReader, SkipsCommentsAndBlankLinesAndKeepsPayloads) {
   fs::remove(p);
 }
 
+TEST(FixtureReader, ProtocolInfoLinesStartingWithHashAreNotComments) {
+  const auto p = writeTemp("# comentario\n#\n#HELLO fw=0.1.0\t{\"type\":\"HELLO\"}\n#WARN cfg_reset\t{\"type\":\"WARN\"}\n");
+  std::vector<Entry> v; std::vector<std::string> errs;
+  EXPECT_TRUE(readFixtureFile(p.string(), v, errs));
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].payload, "#HELLO fw=0.1.0");
+  fs::remove(p);
+}
+
 TEST(FixtureReader, LineWithoutExpectationFailsWithHowToAnnotate) {  // US3-AS3
   const auto p = writeTemp("2601E7123456780000000000A1\n");
   std::vector<Entry> v; std::vector<std::string> errs;

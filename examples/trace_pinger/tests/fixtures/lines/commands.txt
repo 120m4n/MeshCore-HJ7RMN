@@ -1,0 +1,45 @@
+# Comandos y la primera línea (y opcionalmente la segunda) que responde el pinger. Cubre todos los !ERR que emite el firmware.
+# setup: nohash (sin hash configurado) | mon (tras MON on) | pending (con un ping en curso). Sin setup: hash=A1 y reposo.
+HELLO	{"cmd":"HELLO","reply":"#HELLO fw=0.1.0 proto=1 radio=SX1262 id=C3F01A"}
+CFG?	{"cmd":"CFG?","reply":"#CFG freq=915.800 bw=250 sf=10 cr=5 txp=22 hash=A1 rate=1500 timeout=auto raw=0"}
+SET hash=B2	{"cmd":"SET","key":"hash","reply":"#OK hash=B2"}
+SET rate=2000	{"cmd":"SET","key":"rate","reply":"#OK rate=2000"}
+SET timeout=auto	{"cmd":"SET","key":"timeout","reply":"#OK timeout=auto"}
+SET timeout=900	{"cmd":"SET","key":"timeout","reply":"#OK timeout=900"}
+SET raw=1	{"cmd":"SET","key":"raw","reply":"#OK raw=1"}
+SET freq=910.525	{"cmd":"SET","key":"freq","reply":"#OK freq=910.525"}
+SET bw=62.5	{"cmd":"SET","key":"bw","reply":"#OK bw=62.5"}
+SET sf=7	{"cmd":"SET","key":"sf","reply":"#OK sf=7"}
+SET cr=8	{"cmd":"SET","key":"cr","reply":"#OK cr=8"}
+SET txp=22	{"cmd":"SET","key":"txp","reply":"#OK txp=22"}
+SET txp=-9	{"cmd":"SET","key":"txp","reply":"#OK txp=-9"}
+SET hash=00	{"cmd":"SET","key":"hash","reply":"#OK hash=00","reply2":"#WARN hash_suspicious"}
+SET rate=200	{"cmd":"SET","key":"rate","error":"range","reply":"!ERR range rate>=1000"}
+SET sf=13	{"cmd":"SET","key":"sf","error":"range","reply":"!ERR range sf 5-12"}
+SET cr=9	{"cmd":"SET","key":"cr","error":"range","reply":"!ERR range cr 5-8"}
+SET txp=23	{"cmd":"SET","key":"txp","error":"range","reply":"!ERR range txp -9-22"}
+SET bw=63	{"cmd":"SET","key":"bw","error":"range","reply":"!ERR range bw 7.8|10.4|15.6|20.8|31.25|41.7|62.5|125|250|500"}
+SET freq=900	{"cmd":"SET","key":"freq","error":"range","reply":"!ERR range freq 902.000-928.000"}
+SET hash=ZZ	{"cmd":"SET","key":"hash","error":"range","reply":"!ERR range hash 00-FF"}
+SET timeout=100	{"cmd":"SET","key":"timeout","error":"range","reply":"!ERR range timeout auto|200-10000"}
+SET raw=2	{"cmd":"SET","key":"raw","error":"range","reply":"!ERR range raw 0|1"}
+SET sf=x	{"cmd":"SET","key":"sf","error":"syntax","reply":"!ERR syntax"}
+SET sf	{"cmd":"SET","error":"syntax","reply":"!ERR syntax"}
+SET bogus=1	{"cmd":"SET","key":"bogus","error":"unknown","reply":"!ERR unknown bogus"}
+BOGUS	{"cmd":"BOGUS","error":"unknown","reply":"!ERR unknown"}
+MON maybe	{"cmd":"MON","error":"syntax","reply":"!ERR syntax"}
+PING x	{"cmd":"PING","error":"syntax","reply":"!ERR syntax"}
+PING 51	{"cmd":"PING","error":"range","reply":"!ERR range ping 1-50"}
+PING 0	{"cmd":"PING","error":"range","reply":"!ERR range ping 1-50"}
+PING	{"cmd":"PING","error":"state","setup":"nohash","reply":"!ERR state nohash"}
+PING 5	{"cmd":"PING","error":"state","setup":"nohash","reply":"!ERR state nohash"}
+GO	{"cmd":"GO","error":"state","setup":"nohash","reply":"!ERR state nohash"}
+PING	{"cmd":"PING","error":"state","setup":"mon","reply":"!ERR state mon"}
+GO	{"cmd":"GO","error":"state","setup":"mon","reply":"!ERR state mon"}
+PING	{"cmd":"PING","error":"state","setup":"pending","reply":"!ERR state busy"}
+SET freq=915.000	{"cmd":"SET","key":"freq","error":"state","setup":"pending","reply":"!ERR state busy"}
+MON on	{"cmd":"MON","error":"state","setup":"pending","reply":"!ERR state busy"}
+MON on	{"cmd":"MON","reply":"#OK mon=on"}
+MON off	{"cmd":"MON","reply":"#OK mon=off"}
+STOP	{"cmd":"STOP","reply":"#OK stop"}
+GO	{"cmd":"GO","reply":"#OK go"}

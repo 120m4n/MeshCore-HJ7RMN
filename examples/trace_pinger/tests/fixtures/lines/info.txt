@@ -1,0 +1,23 @@
+# Líneas informativas (#HELLO, #CFG, #OK, #WARN, !ERR) para el parser del host (iOS, fase 003).
+# El lado C++ las produce a través de commands.txt; aquí solo se comprueba que están bien formadas.
+#HELLO fw=0.1.0 proto=1 radio=SX1262 id=C3F01A	{"type":"HELLO","fw":"0.1.0","proto":1,"radio":"SX1262","id":"C3F01A"}
+#CFG freq=915.800 bw=250 sf=10 cr=5 txp=22 hash= rate=1500 timeout=auto raw=0	{"type":"CFG","freq":"915.800","bw":"250","sf":10,"cr":5,"txp":22,"hash":"","rate":1500,"timeout":"auto","raw":0}
+#CFG freq=910.525 bw=62.5 sf=7 cr=8 txp=-9 hash=A1 rate=2000 timeout=900 raw=1	{"type":"CFG","freq":"910.525","bw":"62.5","sf":7,"cr":8,"txp":-9,"hash":"A1","rate":2000,"timeout":"900","raw":1}
+#OK hash=A1	{"type":"OK","key":"hash","value":"A1"}
+#OK mon=on	{"type":"OK","key":"mon","value":"on"}
+#OK go	{"type":"OK","text":"go"}
+#OK stop	{"type":"OK","text":"stop"}
+#OK saved	{"type":"OK","text":"saved"}
+#WARN hash_collision	{"type":"WARN","code":"hash_collision"}
+#WARN hash_suspicious	{"type":"WARN","code":"hash_suspicious"}
+#WARN cfg_reset	{"type":"WARN","code":"cfg_reset"}
+#WARN duty_wait 1234	{"type":"WARN","code":"duty_wait","detail":"1234"}
+!ERR syntax	{"type":"ERR","code":"syntax"}
+!ERR unknown	{"type":"ERR","code":"unknown"}
+!ERR unknown bogus	{"type":"ERR","code":"unknown","detail":"bogus"}
+!ERR range rate>=1000	{"type":"ERR","code":"range","detail":"rate>=1000"}
+!ERR range ping 1-50	{"type":"ERR","code":"range","detail":"ping 1-50"}
+!ERR state nohash	{"type":"ERR","code":"state","detail":"nohash"}
+!ERR state mon	{"type":"ERR","code":"state","detail":"mon"}
+!ERR state busy	{"type":"ERR","code":"state","detail":"busy"}
+!ERR state flash	{"type":"ERR","code":"state","detail":"flash"}
