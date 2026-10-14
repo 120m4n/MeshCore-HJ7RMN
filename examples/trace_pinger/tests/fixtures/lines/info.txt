@@ -12,6 +12,7 @@
 #WARN hash_suspicious	{"type":"WARN","code":"hash_suspicious"}
 #WARN cfg_reset	{"type":"WARN","code":"cfg_reset"}
 #WARN duty_wait 1234	{"type":"WARN","code":"duty_wait","detail":"1234"}
+#WARN ble_lost_stop	{"type":"WARN","code":"ble_lost_stop"}
 !ERR syntax	{"type":"ERR","code":"syntax"}
 !ERR unknown	{"type":"ERR","code":"unknown"}
 !ERR unknown bogus	{"type":"ERR","code":"unknown","detail":"bogus"}
