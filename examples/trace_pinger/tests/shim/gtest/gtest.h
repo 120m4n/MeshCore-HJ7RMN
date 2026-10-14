@@ -4,12 +4,18 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <iostream>
 #include <string>
 #include <vector>
 namespace testing { struct Reg { std::string n; std::function<void()> f; }; inline std::vector<Reg>& regs(){static std::vector<Reg> r; return r;} inline int& fails(){static int f=0; return f;}
 struct Adder { Adder(const char* a,const char* b,std::function<void()> f){ regs().push_back({std::string(a)+"."+b,f}); } };
-inline void InitGoogleTest(int*,char**){} }
+inline void InitGoogleTest(int*,char**){}
+// GTEST_SKIP() << "motivo";  igual que gtest: sale de la función de test.
+struct SkipMsg { template <class T> SkipMsg& operator<<(const T& v){ std::cout << " (skip: " << v << ")"; return *this; } };
+struct SkipHelper { void operator=(const SkipMsg&) const { std::printf("\n"); } };
+}
 #define TEST(a,b) static void a##_##b(); static testing::Adder add_##a##_##b(#a,#b,a##_##b); static void a##_##b()
+#define GTEST_SKIP() return testing::SkipHelper() = testing::SkipMsg()
 #define EXPECT_(c,msg) do{ if(!(c)){ std::printf("  FAIL %s:%d %s\n",__FILE__,__LINE__,msg); testing::fails()++; } }while(0)
 #define EXPECT_EQ(a,b) EXPECT_((a)==(b), #a " == " #b)
 #define EXPECT_NE(a,b) EXPECT_((a)!=(b), #a " != " #b)
