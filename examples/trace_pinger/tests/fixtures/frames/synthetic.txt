@@ -1,0 +1,20 @@
+# Fixtures sintéticos: ejemplos del contrato 001/contracts/trace-frame.md.
+# Formato: <HEX>\t<json>   (ver specs/002-trace-frame-host-tests/contracts/fixture-format.md)
+#
+# Petición del pinger (tag 78563412, hash A1)
+2600123456780000000000A1	{"kind":"request","tag":"78563412","hash":"A1"}
+# Ecos válidos: SNR de subida -25 (-6.25 dB) y los dos extremos del int8
+2601E7123456780000000000A1	{"kind":"echo","tag":"78563412","hash":"A1","snr_up_q":-25}
+260180123456780000000000A1	{"kind":"echo","tag":"78563412","hash":"A1","snr_up_q":-128}
+26017F123456780000000000A1	{"kind":"echo","tag":"78563412","hash":"A1","snr_up_q":127}
+# Otro tipo de paquete (ACK flood sintético): parseEcho lo rechaza, readFrom lo acepta
+0D00DEADBEEF	{"kind":"other","route":1,"type":3}
+# Rechazos de cada regla del contrato (reglas de aceptación del eco, 1-5)
+2501E7123456780000000000A1	{"kind":"invalid","reason":"header != 0x26 (TRACE flood)","hash":"A1","readFrom":true}
+2600E7123456780000000000A1	{"kind":"invalid","reason":"path_len 0","hash":"A1","readFrom":true}
+2602E7123456780000000000A1	{"kind":"invalid","reason":"path_len 2","hash":"A1","readFrom":true}
+2601E7123456780000000000	{"kind":"invalid","reason":"longitud 12","hash":"A1","readFrom":true}
+2601E7123456780000000000A100	{"kind":"invalid","reason":"longitud 14","hash":"A1","readFrom":true}
+2601E7123456780000000001A1	{"kind":"invalid","reason":"flags != 0","hash":"A1","readFrom":true}
+2601E7123456780000000000A2	{"kind":"invalid","reason":"hash distinto del esperado","hash":"A1","readFrom":true}
+26C1E7123456780000000000A1	{"kind":"invalid","reason":"path_len con hash de 4 bytes","hash":"A1","readFrom":false}
