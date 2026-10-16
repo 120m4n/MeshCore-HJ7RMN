@@ -202,9 +202,9 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
   CayenneLPP) para firmwares `companion_radio`; mecanismo distinto, no
   relacionado con `tv`.
 
-## Fallback sin sensor I2C (ProMicro nRF52)
+## Fallback sin sensor I2C (ProMicro nRF52, Heltec V3)
 
-Los entornos `ProMicro_repeater_tv` y `ProMicro_room_server_tv` (flag `TV_CORE_FALLBACK=1`)
+Los entornos `ProMicro_repeater_tv`, `ProMicro_room_server_tv`, `Heltec_v3_repeater_tv` y `Heltec_v3_room_server_tv` (flag `TV_CORE_FALLBACK=1`)
 muestrean aunque no haya BME/BMP280:
 
 - **T** = temperatura del MCU (`board.getMCUTemperature()`).
