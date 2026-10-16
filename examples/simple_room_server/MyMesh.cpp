@@ -1,4 +1,8 @@
 #include "MyMesh.h"
+#ifdef WITH_TV_TELEMETRY
+#include <helpers/tv_telemetry.h>
+#define TV_REPLY_CAP 150
+#endif
 
 #define REPLY_DELAY_MILLIS          1500
 #define PUSH_NOTIFY_DELAY_MILLIS    2000
@@ -985,6 +989,12 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     }
   } else if (memcmp(command, "set repeat on", 13) == 0) {
     strcpy(reply, "ERR - repeat now deprecated");
+#ifdef WITH_TV_TELEMETRY
+  } else if (strcmp(command, "tv sensor") == 0) {
+    strcpy(reply, tv::sensor_kind());
+  } else if (memcmp(command, "tv ", 3) == 0) {
+    tv::handle_tv(command + 3, getRTCClock()->getCurrentTime() / 60, reply, TV_REPLY_CAP);
+#endif
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -996,6 +1006,9 @@ bool MyMesh::saveFilter(ClientInfo* client) {
 
 void MyMesh::loop() {
   mesh::Mesh::loop();
+#ifdef WITH_TV_TELEMETRY
+  tv::sample_tick(getRTCClock()->getCurrentTime() / 60);
+#endif
 
   if (millisHasNowPassed(next_push) && acl.getNumClients() > 0) {
     // check for ACK timeouts

@@ -2,6 +2,10 @@
 #ifdef WITH_TV_TELEMETRY
 
 #include "tv_sensor.h"
+#include "tv_batt.h"
+#ifdef TV_CORE_FALLBACK
+#include <target.h>  // board: temperatura del core y batería
+#endif
 #include <math.h>
 #include <Wire.h>
 #include <Adafruit_BME280.h>
@@ -10,7 +14,7 @@
 namespace tv {
 namespace {
 
-enum class Kind : uint8_t { NONE, BME280, BMP280 };
+enum class Kind : uint8_t { NONE, BME280, BMP280, CORE };  // CORE: sin sensor I2C (TV_CORE_FALLBACK)
 
 bool probed = false;
 Kind detected = Kind::NONE;
@@ -32,6 +36,11 @@ void probe() {
   } else if (bmp.begin(0x76) || bmp.begin(0x77)) {
     detected = Kind::BMP280;
   }
+#ifdef TV_CORE_FALLBACK
+  else {
+    detected = Kind::CORE;  // T = temperatura del MCU, H = % batería
+  }
+#endif
   // si ninguno responde, detected queda en NONE para siempre: sensor_ready()
   // nunca vuelve a escanear el bus (requisito: si no hay sensor, no arranca nunca).
 }
@@ -46,12 +55,21 @@ bool sensor_ready() {
 // sample_tick() llama read_temp_dC() y enseguida read_hum_pct(): la medición
 // forzada de acá sirve para las dos lecturas.
 int16_t read_temp_dC() {
+#ifdef TV_CORE_FALLBACK
+  if (detected == Kind::CORE) {
+    float c = board.getMCUTemperature();
+    return isnan(c) ? 0 : (int16_t)lroundf(c * 10.0f);
+  }
+#endif
   if (detected == Kind::BME280) bme.takeForcedMeasurement();
   float c = (detected == Kind::BME280) ? bme.readTemperature() : bmp.readTemperature();
   return (int16_t)lroundf(c * 10.0f);
 }
 
 uint8_t read_hum_pct() {
+#ifdef TV_CORE_FALLBACK
+  if (detected == Kind::CORE) return batt_pct(board.getBattMilliVolts());
+#endif
   if (detected == Kind::BME280) {
     float h = bme.readHumidity();
     if (h < 0) h = 0;
@@ -75,6 +93,9 @@ uint8_t read_hum_pct() {
 
 uint8_t sensor_kind_id() {
   if (!probed) probe();
+  // CORE se declara como BME280 (1): el formato v1 no cambia, el consumidor
+  // lee H como "%RH" aunque sea % de batería. Se distingue con "tv sensor" -> "CORE".
+  if (detected == Kind::CORE) return (uint8_t)Kind::BME280;
   return (uint8_t)detected;  // Kind: NONE=0, BME280=1, BMP280=2
 }
 
@@ -83,6 +104,7 @@ const char* sensor_kind() {
   switch (detected) {
     case Kind::BME280: return "BME280";
     case Kind::BMP280: return "BMP280";
+    case Kind::CORE:   return "CORE";
     default: return "none";
   }
 }

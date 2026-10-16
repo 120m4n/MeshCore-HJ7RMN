@@ -201,3 +201,14 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
 - `README_I2C_TELEMETRY.md` — telemetría formal (`GetTelemetry`,
   CayenneLPP) para firmwares `companion_radio`; mecanismo distinto, no
   relacionado con `tv`.
+
+## Fallback sin sensor I2C (ProMicro nRF52)
+
+Los entornos `ProMicro_repeater_tv` y `ProMicro_room_server_tv` (flag `TV_CORE_FALLBACK=1`)
+muestrean aunque no haya BME/BMP280:
+
+- **T** = temperatura del MCU (`board.getMCUTemperature()`).
+- **H** = % de batería (lineal 3300–4200 mV). Fuera de 3000–4300 mV (sin batería, por USB) = `100`.
+- El header del vector declara **BME280** (formato v1 sin cambios), así que un cliente muestra H como "%RH".
+  `tv sensor` responde `CORE` para distinguirlo. Con un sensor real conectado se usa el sensor.
+- Consulta desde un companion: login al repetidor/room y `tv 0`.
