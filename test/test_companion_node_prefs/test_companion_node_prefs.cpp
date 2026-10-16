@@ -6,6 +6,11 @@
 
 #include "../../examples/companion_radio/NodePrefs.h"
 
+// CommonRadioPrefs.cpp needs target.h (board), so it is not in the native build;
+// stub its key-function so NodePrefs::RadioPrefs gets a vtable.
+bool CommonRadioPrefs::getByKey(const char*, char*, size_t) { return false; }
+bool CommonRadioPrefs::setByKey(const char*, const char*) { return false; }
+
 class ReplayStream : public Stream {
   const char* _text;
   int _pos = 0;
