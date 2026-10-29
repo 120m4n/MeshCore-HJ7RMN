@@ -636,9 +636,16 @@ void MyMesh::onChannelDataRecv(const mesh::GroupChannel &channel, mesh::Packet *
   }
 }
 
+#ifdef WITH_BMS_BLE
+static bool bms_queried;  // a telemetry request arrived since the last hourly BMS cycle
+#endif
+
 uint8_t MyMesh::onContactRequest(const ContactInfo &contact, uint32_t sender_timestamp, const uint8_t *data,
                                  uint8_t len, uint8_t *reply) {
   if (data[0] == REQ_TYPE_GET_TELEMETRY_DATA) {
+#ifdef WITH_BMS_BLE
+    bms_queried = true;
+#endif
     uint8_t permissions = 0;
     uint8_t cp = contact.flags >> 1; // LSB used as 'favourite' bit (so only use upper bits)
 
@@ -2431,6 +2438,24 @@ void MyMesh::loop() {
     saveContacts();
     dirty_contacts_expiry = 0;
   }
+
+#ifdef WITH_BMS_BLE
+  // Hourly BMS cycle finished: if nobody asked for telemetry this hour, report on channel 0 (Public).
+  bool bms_ok;
+  if (sensors.pollBmsCycle(bms_ok)) {
+    if (!bms_queried) {
+      char text[120];
+      if (!bms_ok || !sensors.formatBmsSummary(text, sizeof(text))) {
+        strcpy(text, "fallo a conexion ble bms");
+      }
+      ChannelDetails channel;
+      if (getChannel(0, channel)) {
+        sendGroupMessage(getRTCClock()->getCurrentTimeUnique(), channel.channel, _prefs.node_name, text, strlen(text));
+      }
+    }
+    bms_queried = false;
+  }
+#endif
 }
 
 bool MyMesh::advert() {
