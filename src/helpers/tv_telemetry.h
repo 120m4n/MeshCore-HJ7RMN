@@ -69,7 +69,17 @@ inline void sample_tick(uint32_t now_min) {
 // bucket de 30 min. Por eso `since` se compara por bucket, no por minuto: el
 // backend puede mandar el epoch decodificado del último registro tal cual.
 constexpr char B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-constexpr uint8_t FORMAT_VERSION = 1;
+constexpr uint8_t FORMAT_VERSION = 3;
+
+// BMP280: el campo H lleva presión en pasos de 2 hPa desde 545 hPa
+// (545-1055 hPa: nivel del mar hasta ~4800 m). Saturado a [0,255]; NaN -> 0.
+constexpr float HPA_BASE = 545.0f, HPA_STEP = 2.0f;
+inline uint8_t hpa_code(float hpa) {
+  float c = (hpa - HPA_BASE) / HPA_STEP;
+  if (!(c >= 0)) return 0;  // también atrapa NaN
+  if (c > 255) return 255;
+  return (uint8_t)(c + 0.5f);
+}
 
 inline uint32_t zigzag(int32_t v) { return v >= 0 ? (uint32_t)v << 1 : ((uint32_t)(-v) << 1) - 1; }
 

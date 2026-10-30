@@ -2,6 +2,7 @@
 #ifdef WITH_TV_TELEMETRY
 
 #include "tv_sensor.h"
+#include "tv_telemetry.h"
 #include <math.h>
 #include <Wire.h>
 #include <Adafruit_BME280.h>
@@ -60,17 +61,13 @@ uint8_t read_hum_pct() {
   }
   // ponytail: BMP280 no mide humedad. En vez de mandar un "0%RH" inventado
   // (que se lee como un dato real y no lo es), este campo pasa a llevar
-  // presión atmosférica escalada: (hPa - 800), saturado a [0,255] ->
-  // cubre 800-1055 hPa (nivel del mar normal + variación de clima).
+  // presión atmosférica escalada con hpa_code() (tv_telemetry.h):
+  // (hPa - 545) / 2 -> cubre 545-1055 hPa, del nivel del mar a ~4800 m.
   // El header del vector tv lleva sensor_kind_id() para que el consumidor
   // sepa si este campo es %RH o presión.
   // Upgrade: si hace falta %RH real con un BMP280 en el bus, hay que sumar
   // un sensor de humedad separado -- fuera del alcance de este spec.
-  float hpa = bmp.readPressure() / 100.0f;  // Pa -> hPa
-  float scaled = hpa - 800.0f;
-  if (scaled < 0) scaled = 0;
-  if (scaled > 255) scaled = 255;
-  return (uint8_t)lroundf(scaled);
+  return hpa_code(bmp.readPressure() / 100.0f);  // Pa -> hPa
 }
 
 uint8_t sensor_kind_id() {

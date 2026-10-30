@@ -3,7 +3,7 @@
 Variante del firmware **repeater** de MeshCore que guarda 24 h de
 temperatura (y humedad o presión, según el sensor) en un ring en RAM, una
 muestra cada **30 min** (48 slots), y las entrega como vectores de texto
-compactos (formato **v1**, base64url, ver abajo) con el comando
+compactos (formato **v3**, base64url, ver abajo) con el comando
 `tv <since>`: el día completo entra en una sola consulta. Pensado para un
 backend que hace polling periódico (cada hora, per la spec), no para
 lectura instantánea por la malla.
@@ -17,7 +17,7 @@ lectura instantánea por la malla.
   está detrás de ese flag y no toca ningún otro build.
 - **Spec original**: `docs/Spec telemetría vectorial MeshCore (XIAO nRF52).md`
   — decisiones de diseño del ring/muestreo. Su formato de vector
-  (`T,H,t;dT,dH,dt;...`, "v0") ya fue reemplazado por el v1 descrito acá.
+  (`T,H,t;dT,dH,dt;...`, "v0") ya fue reemplazado por el v3 descrito acá.
 - **Código**: `src/helpers/tv_telemetry.h` (ring + encoder, sin floats, sin
   filesystem), `src/helpers/tv_sensor.h/.cpp` (detección de sensor +
   lectura entera), `examples/simple_repeater/MyMesh.cpp` (comandos CLI +
@@ -36,7 +36,7 @@ El campo `H` del vector cambia de significado según qué se detectó:
 | Sensor detectado | Campo `H` del vector |
 | --- | --- |
 | BME280 | %RH real (0-100) |
-| BMP280 (no mide humedad) | presión atmosférica escalada: `hPa - 800`, saturado a `[0,255]` (cubre ~800-1055 hPa) |
+| BMP280 (no mide humedad) | presión atmosférica escalada: `(hPa - 545) / 2`, saturado a `[0,255]` (cubre 545-1055 hPa: nivel del mar hasta ~4800 m, pasos de 2 hPa) |
 | Ninguno | el muestreo no arranca; `tv <since>` siempre responde `-` |
 
 El header del vector (primer carácter) indica cuál de los dos es, así que
@@ -48,13 +48,13 @@ diagnóstico.
 | Comando | Respuesta | Notas |
 | --- | --- | --- |
 | `tv sensor` | `BME280`, `BMP280` o `none` | Diagnóstico: qué detectó el firmware al boot. |
-| `tv <since>` | Un vector v1 (ej. `FAFBx1KKIuA3CCCBDC.C!BFA8`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
+| `tv <since>` | Un vector v3 (ej. `NAFBx1KKIuA3CCCBDC.C!BFA8`) o `-` | `since=0` pide todo lo que haya; ver paginación abajo. |
 | `clock` | Fecha/hora UTC legible (`HH:MM - D/M/AAAA UTC`) | **No** da epoch en minutos crudo — ver la receta de uso más abajo. |
 
 El reply de `tv` está limitado a `TV_REPLY_CAP = 150` bytes (el buffer de
 reply real de `MyMesh::onPeerDataRecv` es de 161 bytes; se deja margen).
 
-## Formato del vector (v1)
+## Formato del vector (v3)
 
 Alfabeto base64url (`A–Z a–z 0–9 - _`, 6 bits por carácter), sin
 separadores. Pensado para enlaces débiles: menos bytes = menos airtime y
@@ -66,7 +66,7 @@ V NN EEEEE TT HH | dT dH | .k | !TTHH | ...
 
 | Token | Chars | Contenido |
 | --- | --- | --- |
-| `V` | 1 | `(versión 1 << 2) \| sensor`: `F` = BME280, `G` = BMP280 |
+| `V` | 1 | `(versión 3 << 2) \| sensor`: `N` = BME280, `O` = BMP280 |
 | `NN` | 2 | cantidad de registros del vector (el decoder detecta truncamiento) |
 | `EEEEE` | 5 | `epoch_min` exacto del anchor (primer registro) |
 | `TT` | 2 | temperatura del anchor en décimas de °C, zigzag |
@@ -185,16 +185,16 @@ pio run -e Xiao_nrf52_repeater_tv -t upload
   completa: formato del vector, decisiones de diseño, decoder TypeScript
   de referencia.
 - `tools/tv_decoder/tv_decoder.py` y `tools/tv_decoder/tv_decoder.ts` —
-  decoders v1 standalone (sin dependencias externas), mismo CLI:
+  decoders v3 standalone (sin dependencias externas), mismo CLI:
   `python3 tv_decoder.py '<vector>'` / `node tv_decoder.ts '<vector>'`.
-  Leen el sensor del header y muestran %RH o hPa (offset 800, el de
+  Leen el sensor del header y muestran %RH o hPa (`h*2 + 545`, el de
   `tv_sensor.cpp`) sin flags.
 - `tools/tv_decoder/test_tv_roundtrip.py` — compila el encoder real en host
   (`g++`), pagina un día completo y casos borde (huecos, re-anchor,
   negativos, truncamiento) y los decodifica: `python3
   tools/tv_decoder/test_tv_roundtrip.py`.
 - **Vectores del formato viejo v0** (`T,H,t;dT,dH,dt;...`, firmware previo
-  a este cambio): los decoders v1 los rechazan y apuntan al decoder
+  a este cambio): los decoders v3 los rechazan y apuntan al decoder
   anterior en git:
   `git show tv-v0:tools/tv_decoder/tv_decoder.py > tv_decoder_v0.py`
   (o `.ts`).

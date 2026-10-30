@@ -5,9 +5,9 @@
   // ../tv_decoder/tv_decoder.ts
   var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   var INTERVAL_MIN = 30;
-  var FORMAT_VERSION = 1;
+  var FORMAT_VERSION = 3;
   var KINDS = { 1: "BME280", 2: "BMP280" };
-  var BMP_OFFSET_HPA = 800;
+  var bmpHpa = (h) => h * 2 + 545;
   var V0_HINT = 'vector en formato viejo v0 ("T,H,t;..."): decodificalo con el decoder anterior de git: git show tv-v0:tools/tv_decoder/tv_decoder.ts > tv_decoder_v0.ts';
   var TvParseError = class extends Error {
   };
@@ -69,7 +69,7 @@
   function main() {
     const vector = define_process_argv_default[2];
     if (vector === void 0 || vector === "-h" || vector === "--help") {
-      console.log("Uso: node tv_decoder.ts '<vector>'   (ej. 'FAFBx1KKIuA3CCCBDC.C!BFA8')");
+      console.log("Uso: node tv_decoder.ts '<vector>'   (ej. 'NAFBx1KKIuA3CCCBDC.C!BFA8')");
       process.exit(vector === void 0 ? 1 : 0);
     }
     let res;
@@ -89,7 +89,7 @@
       console.log(row(
         String(i),
         s.tempC.toFixed(1),
-        String(bmp ? s.hRaw + BMP_OFFSET_HPA : s.hRaw),
+        String(bmp ? bmpHpa(s.hRaw) : s.hRaw),
         String(s.epochMin),
         s.date.toISOString().replace("T", " ").replace(".000Z", "Z")
       ));
@@ -252,7 +252,6 @@
   }
 
   // popup.ts
-  var BMP_OFFSET_HPA2 = 800;
   var $ = (id) => document.getElementById(id);
   var PREFS = "tv_edge_ext.prefs";
   var loadPrefs = () => {
@@ -319,7 +318,7 @@
     });
     const { kind, samples } = tabs[active];
     const bmp = kind === "BMP280", local = $("local").checked;
-    const hVal = (h) => bmp ? h + BMP_OFFSET_HPA2 : h;
+    const hVal = (h) => bmp ? bmpHpa(h) : h;
     if (showCharts && samples.length < 2) warns.push("Se necesitan al menos 2 puntos para graficar.");
     banner("warn", warns.join("\n"));
     $("info").textContent = `${kind} \xB7 ${samples.length} registro${samples.length === 1 ? "" : "s"}`;

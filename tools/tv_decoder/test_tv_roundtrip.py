@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 import tempfile
 
-from tv_decoder import TvParseError, decode_vector
+from tv_decoder import TvParseError, bmp_hpa, decode_vector
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 HARNESS = r"""
@@ -21,12 +21,13 @@ uint8_t read_hum_pct() { return 0; }
 const char* sensor_kind() { return "test"; }
 uint8_t sensor_kind_id() { return kind; }
 }
-// stdin: "k <kind>" | "put <epoch_min> <t> <h>" | "enc <now_min> <since>" (imprime vector)
+// stdin: "k <kind>" | "put <epoch_min> <t> <h>" | "enc <now_min> <since>" (imprime vector) | "p <hPa>" (imprime hpa_code)
 int main() {
   std::string op;
   while (std::cin >> op) {
     if (op == "k") { int k; std::cin >> k; tv::kind = (uint8_t)k; }
     else if (op == "put") { unsigned long e; int t, h; std::cin >> e >> t >> h; tv::put(e, (int16_t)t, (uint8_t)h); }
+    else if (op == "p") { std::string s; std::cin >> s; std::cout << (int)tv::hpa_code(std::stof(s)) << "\n"; }
     else if (op == "enc") { unsigned long now, since; std::cin >> now >> since;
       char out[150]; tv::encode(now, since, out, sizeof out); std::cout << out << "\n"; }
   }
@@ -79,7 +80,12 @@ def main():
         assert got == [(e, t, h, "BMP280") for e, t, h in want], got
         assert "." in pages[0] and "!" in pages[0], pages
 
-        # 3) vacío, formato viejo y truncamiento
+        # 3) escala de presión BMP280: Bucaramanga (~905), Bogotá (~752), saturación y NaN
+        codes = run(exe, "p 905\np 752\np 1013.25\np 400\np 2000\np nan\n")
+        assert codes == ["180", "104", "234", "0", "255", "0"], codes
+        assert [bmp_hpa(int(c)) for c in codes[:3]] == [905, 753, 1013], codes
+
+        # 4) vacío, formato viejo y truncamiento
         assert run(exe, f"enc {now} 0\n") == ["-"]
         assert decode_vector("-") == ("", [])
         for bad, msg in [("280,55,29840000;0,0,15", "git show"), (pages[0][:-2], "truncado")]:

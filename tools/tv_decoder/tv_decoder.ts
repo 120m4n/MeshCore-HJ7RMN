@@ -1,18 +1,18 @@
-// tv_decoder.ts -- decodifica vectores v1 del comando `tv <since>` de
+// tv_decoder.ts -- decodifica vectores v3 del comando `tv <since>` de
 // MeshCore (formato compacto base64url, ver encode() en
 // src/helpers/tv_telemetry.h y README_TV_TELEMETRY.md). Sin dependencias.
 //
 // El header del vector dice qué sensor tiene el nodo: con BME280 la columna H
-// es %RH; con BMP280 es presión escalada (hPa - 800) y se muestra en hPa.
+// es %RH; con BMP280 es presión escalada (hPa - 545) / 2 y se muestra en hPa.
 //
 // Vectores del formato viejo ("T,H,t;dT,dH,dt;...") se rechazan: usar el
 // decoder anterior desde git (ver V0_HINT).
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 const INTERVAL_MIN = 30;
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 3;
 const KINDS: Record<number, string> = { 1: "BME280", 2: "BMP280" };
-const BMP_OFFSET_HPA = 800; // mismo offset que read_hum_pct() en tv_sensor.cpp
+export const bmpHpa = (h: number) => h * 2 + 545; // inverso de hpa_code() en tv_telemetry.h
 const V0_HINT =
   'vector en formato viejo v0 ("T,H,t;..."): decodificalo con el decoder anterior de git: ' +
   "git show tv-v0:tools/tv_decoder/tv_decoder.ts > tv_decoder_v0.ts";
@@ -21,7 +21,7 @@ export interface TvSample {
   epochMin: number; // minutos desde epoch, UTC
   date: Date;        // el mismo instante como Date
   tempC: number;      // °C con 1 decimal
-  hRaw: number;        // %RH (BME280) o hPa-800 (BMP280)
+  hRaw: number;        // %RH (BME280) o (hPa-545)/2 (BMP280)
 }
 
 export class TvParseError extends Error {}
@@ -92,7 +92,7 @@ export function decodeVector(s: string): { kind: string; samples: TvSample[] } {
 function main() {
   const vector = process.argv[2];
   if (vector === undefined || vector === "-h" || vector === "--help") {
-    console.log('Uso: node tv_decoder.ts \'<vector>\'   (ej. \'FAFBx1KKIuA3CCCBDC.C!BFA8\')');
+    console.log('Uso: node tv_decoder.ts \'<vector>\'   (ej. \'NAFBx1KKIuA3CCCBDC.C!BFA8\')');
     process.exit(vector === undefined ? 1 : 0);
   }
 
@@ -116,7 +116,7 @@ function main() {
     console.log(row(
       String(i),
       s.tempC.toFixed(1),
-      String(bmp ? s.hRaw + BMP_OFFSET_HPA : s.hRaw),
+      String(bmp ? bmpHpa(s.hRaw) : s.hRaw),
       String(s.epochMin),
       s.date.toISOString().replace("T", " ").replace(".000Z", "Z"),
     ));

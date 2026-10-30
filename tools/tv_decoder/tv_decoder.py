@@ -1,9 +1,9 @@
-"""tv_decoder.py -- decodifica vectores v1 del comando `tv <since>` de
+"""tv_decoder.py -- decodifica vectores v3 del comando `tv <since>` de
 MeshCore (formato compacto base64url, ver encode() en
 src/helpers/tv_telemetry.h y README_TV_TELEMETRY.md). Solo stdlib.
 
 El header del vector dice qué sensor tiene el nodo: con BME280 la columna H
-es %RH; con BMP280 es presión escalada (hPa - 800) y se muestra en hPa.
+es %RH; con BMP280 es presión escalada (hPa - 545) / 2 y se muestra en hPa.
 
 Vectores del formato viejo ("T,H,t;dT,dH,dt;...") se rechazan: usar el
 decoder anterior desde git (ver V0_HINT).
@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 IDX = {c: i for i, c in enumerate(B64)}
 INTERVAL_MIN = 30
-FORMAT_VERSION = 1
+FORMAT_VERSION = 3
 KINDS = {1: "BME280", 2: "BMP280"}
-BMP_OFFSET_HPA = 800  # mismo offset que read_hum_pct() en tv_sensor.cpp
+def bmp_hpa(h: int) -> int:
+    return h * 2 + 545  # inverso de hpa_code() en tv_telemetry.h
 V0_HINT = ("vector en formato viejo v0 (\"T,H,t;...\"): decodificalo con el decoder "
            "anterior de git: git show tv-v0:tools/tv_decoder/tv_decoder.py > tv_decoder_v0.py")
 
@@ -31,7 +32,7 @@ class TvSample:
     epoch_min: int
     date: datetime
     temp_c: float
-    h_raw: int  # %RH (BME280) o hPa-800 (BMP280)
+    h_raw: int  # %RH (BME280) o (hPa-545)/2 (BMP280)
 
 def unzigzag(u: int) -> int:
     return (u >> 1) ^ -(u & 1)
@@ -95,8 +96,8 @@ def decode_vector(s: str) -> tuple[str, list[TvSample]]:
     return kind, out
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Decodifica un vector tv (v1) de MeshCore.")
-    parser.add_argument("vector", help='vector tv, ej. "FAFBx1KKIuA3CCCBDC.C!BFA8"')
+    parser = argparse.ArgumentParser(description="Decodifica un vector tv (v3) de MeshCore.")
+    parser.add_argument("vector", help='vector tv, ej. "NAFBx1KKIuA3CCCBDC.C!BFA8"')
     args = parser.parse_args()
 
     try:
@@ -111,7 +112,7 @@ def main() -> None:
     print(header)
     print("-" * len(header))
     for i, s in enumerate(samples):
-        hr_value = s.h_raw + BMP_OFFSET_HPA if bmp else s.h_raw
+        hr_value = bmp_hpa(s.h_raw) if bmp else s.h_raw
         print(f"{i:>2}  {s.temp_c:>7.1f}  {hr_value:>13}  {s.epoch_min:>10}  "
               f"{s.date.strftime('%Y-%m-%d %H:%M:%S')}")
 

@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { decodeVector } from "../tv_decoder/tv_decoder.ts";
 
-const v = "FAFBx1KKIuA3CCCBDC.C!BFA8";
+const v = "NAFBx1KKIuA3CCCBDC.C!BFA8";
 const { kind, samples } = decodeVector(v);
 const py = execFileSync("python3", [new URL("../tv_decoder/tv_decoder.py", import.meta.url).pathname, v], { encoding: "utf8" });
 const pyEpochs = [...py.matchAll(/^\s*\d+\s+\S+\s+\S+\s+(\d+)\s/gm)].map((m) => +m[1]);
@@ -29,8 +29,8 @@ console.log("ok: chart.ts (niceTicks, mean, segments, extremes)");
 
 // tabs.ts: una pestaña por línea válida (vectores BMP280 reales: 1 y 20 registros)
 import { parseLines } from "./tabs.ts";
-const BMP1 = "GABBtFfMIUBj", BMP20 = "GAUBx23tIkBkDADABAABAACAFCBBEAAAEACBECCABACCFADAAA";
-const txt = [BMP1, "", "-", "FAFBx1KKIuA3CCCB", BMP20, v].join("\n");
+const BMP1 = "OABBtFfMIUBj", BMP20 = "OAUBx23tIkBkDADABAABAACAFCBBEAAAEACBECCABACCFADAAA";
+const txt = [BMP1, "", "-", "NAFBx1KKIuA3CCCB", BMP20, v].join("\n");
 let p = parseLines(txt);
 eq(p.tabs.map((t) => [t.line, t.samples.length, t.kind]), [[1, 1, "BMP280"], [5, 20, "BMP280"], [6, 5, "BME280"]], "tabs por línea válida");
 eq([p.errors.length, p.errors[0].startsWith("línea 4:"), p.skipped], [1, true, 0], "error parcial no aborta");

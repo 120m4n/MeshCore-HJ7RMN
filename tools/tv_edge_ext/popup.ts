@@ -1,8 +1,8 @@
 // popup.ts -- UI sobre parseLines()/renderCharts(): una pestaña por línea válida.
 import { MAX_TABS, mergeTabs, parseLines, type Tab } from "./tabs";
 import { renderCharts } from "./chart";
+import { bmpHpa } from "../tv_decoder/tv_decoder.ts";
 
-const BMP_OFFSET_HPA = 800;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 // Preferencias del popup (se pierden al cerrarlo): localStorage puede no estar disponible.
@@ -73,7 +73,7 @@ function render() {
 
   const { kind, samples } = tabs[active];
   const bmp = kind === "BMP280", local = $<HTMLInputElement>("local").checked;
-  const hVal = (h: number) => (bmp ? h + BMP_OFFSET_HPA : h);
+  const hVal = (h: number) => (bmp ? bmpHpa(h) : h);
   if (showCharts && samples.length < 2) warns.push("Se necesitan al menos 2 puntos para graficar.");
   banner("warn", warns.join("\n"));
 
