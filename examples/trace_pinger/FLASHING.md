@@ -34,6 +34,20 @@ Solo compilar, sin flashear: `pio run -e Xiao_nrf52_trace_pinger`. El paquete qu
 
 Tamaño actual: ≈ 256 KB de 811 KB de flash y ≈ 19 KB de 235 KB de RAM.
 
+### Variante Faketec (ProMicro nRF52840 + SX1262)
+
+Mismo firmware, env **`ProMicro_trace_pinger`** (en `variants/promicro/platformio.ini`):
+
+```bash
+pio run -e ProMicro_trace_pinger -t upload
+```
+
+Los comandos, el protocolo y el BLE son idénticos. Diferencias:
+
+- Para entrar al bootloader a mano, haz doble reset puenteando `RST`–`GND` dos veces rápido.
+- No trae `NRF52_POWER_MANAGEMENT`, porque `PromicroBoard` no implementa el apagado por bajo voltaje. Por eso no hay protección de arranque con batería baja.
+- El paquete queda en `.pio/build/ProMicro_trace_pinger/firmware.zip`.
+
 ### Si no encuentra el dispositivo o falla la subida
 
 1. **Doble reset:** pulsa dos veces seguidas, rápido, el botón de reset del XIAO. El LED debe pulsar despacio (bootloader). Repite el comando de `upload`.
