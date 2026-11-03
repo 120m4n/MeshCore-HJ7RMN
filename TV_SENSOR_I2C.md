@@ -19,7 +19,7 @@ La telemetría vectorial **`tv`** es lo que **no** viene por defecto:
 | Qué | ¿Por defecto en el repeater? | Cómo se activa |
 | --- | --- | --- |
 | Lectura de BMP280/BME280 vía telemetría estándar (CayenneLPP, "Request telemetry" desde la app) | **Sí**, en las dos XIAO | Ya viene en `sensor_base` |
-| Ring de 24 h + comandos `tv sensor` / `tv <since>` | **No** | `-D WITH_TV_TELEMETRY=1`. Ya existe como env `Xiao_nrf52_repeater_tv`; la S3 todavía no tiene env `_tv` |
+| Ring de 24 h + comandos `tv sensor` / `tv <since>` | **No** | `-D WITH_TV_TELEMETRY=1`. Ya existe como env `Xiao_nrf52_repeater_tv` y `ProMicro_repeater_tv` (Faketec: SDA=P1.04, SCL=P0.11, en `Wire`; pines Arduino 8/7); la S3 todavía no tiene env `_tv` |
 
 ## Funcionalidad en la XIAO nRF52840 (+ Wio-SX1262)
 
@@ -180,7 +180,7 @@ del `PIN_WIRE_SDA/SCL` del variant, sin flag explícito.
 | `meshnology_w12` | ✅ | ✅ | Wire · 17/18 | `meshnology_w12_repeater`, `…_bridge_espnow` |
 | `minewsemi_me25ls01` | ❌ | ✅ | Wire · variant.h | `Minewsemi_me25ls01_repeater` |
 | `muziworks_r1_neo` | ✅ | ✅ | Wire · variant.h | `R1Neo_repeater` |
-| `promicro` | ✅ | ✅ | Wire · 8/7 | `ProMicro_repeater`, `…_bridge_rs232_serial1` |
+| `promicro` (Faketec) | ✅ | ✅ | Wire · 8/7 | `ProMicro_repeater`, `ProMicro_repeater_tv`, `…_bridge_rs232_serial1` |
 | `rak3112` | ✅ | ✅ | Wire · 9/40 | `RAK_3112_repeater` (+ `_bridge_espnow`, `_bridge_rs232`) |
 | `rak3401` | ✅ | ✅ | Wire · variant.h | `RAK_3401_repeater` |
 | `rak4631` | ✅ | ✅ | Wire · 13/14 | `RAK_4631_repeater`, `…_ethernet`, `…_bridge_rs232_serial{1,2}` |
