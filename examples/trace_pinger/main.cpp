@@ -2,7 +2,18 @@
 // Cascarón Arduino: traduce radio, USB serie y flash a eventos de tracecore::Pinger.
 // No ejecuta el core de mesh: solo transmite tramas TRACE/DIRECT (FR-008).
 #include <Arduino.h>
+#ifdef NRF52_PLATFORM
 #include <InternalFileSystem.h>
+using namespace Adafruit_LittleFS_Namespace;
+#define CFG_FS InternalFS
+#define CFG_WRITE FILE_O_WRITE
+#define DEVICE_ID NRF_FICR->DEVICEID[0]
+#else
+#include <SPIFFS.h>
+#define CFG_FS SPIFFS
+#define CFG_WRITE "w"
+#define DEVICE_ID ((uint32_t)(ESP.getEfuseMac() >> 16))   // bytes 2..5 de la MAC: los bajos son el OUI de Espressif
+#endif
 #include <target.h>
 
 #include <string_view>
@@ -14,7 +25,6 @@
 #include "tracecore/LineCodec.h"
 #include "tracecore/Pinger.h"
 
-using namespace Adafruit_LittleFS_Namespace;
 using namespace tracecore;
 
 namespace {
@@ -41,8 +51,8 @@ struct UsbSink : LineSink {
 enum class CfgLoad { Loaded, Missing, Corrupt };
 
 CfgLoad cfgLoad(PingerConfig& out) {
-  if (!InternalFS.exists(kCfgPath)) return CfgLoad::Missing;
-  File f = InternalFS.open(kCfgPath);
+  if (!CFG_FS.exists(kCfgPath)) return CfgLoad::Missing;
+  File f = CFG_FS.open(kCfgPath);
   if (!f) return CfgLoad::Corrupt;
   uint8_t b[kCfgBlobSize];
   const int n = f.read(b, sizeof b);
@@ -56,8 +66,8 @@ CfgLoad cfgLoad(PingerConfig& out) {
 bool cfgSave(const PingerConfig& c) {
   uint8_t b[kCfgBlobSize];
   serialize(c, b);
-  InternalFS.remove(kCfgPath);  // FILE_O_WRITE no trunca
-  File f = InternalFS.open(kCfgPath, FILE_O_WRITE);
+  CFG_FS.remove(kCfgPath);  // FILE_O_WRITE (nRF52) no trunca
+  File f = CFG_FS.open(kCfgPath, CFG_WRITE);
   if (!f) return false;
   const size_t w = f.write(b, sizeof b);
   f.close();
@@ -75,7 +85,7 @@ LineAssembler serialLines;
 
 void applyRadio(const RadioConfig& r) {
   radio_driver.setParams(r.freqMhz(), r.bwKhz(), r.sf, r.cr);
-  radio_driver.setTxPower(r.txp_dbm);
+  radio_driver.setTxPower(min<int>(r.txp_dbm, LORA_TX_POWER));   // SX1276: tope 20 dBm; RadioLib rechaza más
   radio_driver.resetAGC();  // fuerza re-armar RX con los parámetros nuevos
 }
 
@@ -128,26 +138,30 @@ void pollBle() {
 }  // namespace
 
 void setup() {
-  board.begin();
-  if (!radio_init()) {
-    while (1) delay(1000);
-  }
-  radio_driver.begin();
-  randomSeed(radio_driver.getRngSeed());
-  InternalFS.begin();
-  ble.begin();
-
   Serial.begin(115200);
   const uint32_t t0 = millis();
   while (!Serial && millis() - t0 < 3000) delay(10);
   delay(100);
+  board.begin();
+  if (!radio_init()) {
+    Serial.println("!ERR radio init");   // p.ej. variante SX1262 flasheada sobre placa SX1276
+    while (1) delay(1000);
+  }
+  radio_driver.begin();
+  randomSeed(radio_driver.getRngSeed());
+#ifdef NRF52_PLATFORM
+  InternalFS.begin();
+#else
+  SPIFFS.begin(true);   // formatea si la partición no está montable
+#endif
+  ble.begin();
 
   PingerConfig cfg;  // valores por defecto: preset Australia, txp 22, sin hash
   const CfgLoad loaded = cfgLoad(cfg);
   if (loaded == CfgLoad::Corrupt) cfg = PingerConfig();
   applyRadio(cfg.radio);
 
-  pinger = new Pinger(cfg, rng, sink, NRF_FICR->DEVICEID[0]);
+  pinger = new Pinger(cfg, rng, sink, DEVICE_ID);
   pinger->emitBoot(loaded == CfgLoad::Corrupt);
   board.onBootComplete();
 }

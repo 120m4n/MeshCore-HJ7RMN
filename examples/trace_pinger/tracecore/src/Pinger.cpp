@@ -9,6 +9,10 @@
 #include "tracecore/Text.h"
 #include "tracecore/TraceFrame.h"
 
+#ifndef TRACE_RADIO_NAME
+#define TRACE_RADIO_NAME "SX1262"
+#endif
+
 namespace tracecore {
 namespace {
 inline bool reached(uint32_t now, uint32_t t) { return (int32_t)(now - t) >= 0; }
@@ -32,7 +36,7 @@ void Pinger::sayRaw(const uint8_t* b, size_t n, int32_t rssi_d, int32_t snr_c, u
 }
 
 void Pinger::emitBoot(bool cfg_reset) {
-  say("#HELLO fw=%s proto=1 radio=SX1262 id=%06X", kFwVersion, (unsigned)id_);
+  say("#HELLO fw=%s proto=1 radio=%s id=%06X", kFwVersion, TRACE_RADIO_NAME, (unsigned)id_);
   if (cfg_reset) say("#WARN cfg_reset");
   out_.line(buf_, formatCfg(buf_, sizeof buf_, cfg_));
 }
@@ -43,7 +47,7 @@ Action Pinger::onCommand(std::string_view line, uint32_t now, Origin origin) {
   switch (c.kind) {
     case Command::Kind::Empty: return {};
     case Command::Kind::Hello:
-      say("#HELLO fw=%s proto=1 radio=SX1262 id=%06X", kFwVersion, (unsigned)id_);
+      say("#HELLO fw=%s proto=1 radio=%s id=%06X", kFwVersion, TRACE_RADIO_NAME, (unsigned)id_);
       return {};
     case Command::Kind::CfgQuery:
       out_.line(buf_, formatCfg(buf_, sizeof buf_, cfg_));

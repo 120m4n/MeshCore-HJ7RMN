@@ -48,6 +48,28 @@ Los comandos, el protocolo y el BLE son idénticos. Diferencias:
 - No trae `NRF52_POWER_MANAGEMENT`, porque `PromicroBoard` no implementa el apagado por bajo voltaje. Por eso no hay protección de arranque con batería baja.
 - El paquete queda en `.pio/build/ProMicro_trace_pinger/firmware.zip`.
 
+### Variante LilyGo T-Beam (ESP32)
+
+Mismo firmware. El env depende del chip LoRa de tu T-Beam:
+
+| Placa | Env |
+|---|---|
+| T-Beam v1.0/v1.1 con SX1276 (PMU AXP192, la habitual) | **`Tbeam_SX1276_trace_pinger`** |
+| T-Beam con SX1262 | **`Tbeam_SX1262_trace_pinger`** |
+
+```bash
+pio run -e Tbeam_SX1276_trace_pinger -t upload
+```
+
+Si arranca con `!ERR radio init` por serie, flasheaste el env del otro chip. El SX1276 llega a 20 dBm como máximo: con `txp` por encima transmite a 20, aunque `CFG?` siga mostrando el valor configurado.
+
+Los comandos y el protocolo son idénticos, y el BLE es el mismo NUS sin emparejar con nombre `YagiPinger-XXXX`. Diferencias:
+
+- Sube por esptool (USB-serie CP210x/CH9102), no por DFU. Si no entra solo, mantén `BOOT` (IO0) al conectar.
+- La config se guarda en SPIFFS: un flasheo de otro firmware con otra tabla de particiones la borra.
+- El advertising va fijo a 100 ms, sin la bajada a 500 ms tras 30 s.
+- La pantalla OLED y el GPS no se usan.
+
 ### Si no encuentra el dispositivo o falla la subida
 
 1. **Doble reset:** pulsa dos veces seguidas, rápido, el botón de reset del XIAO. El LED debe pulsar despacio (bootloader). Repite el comando de `upload`.
