@@ -15,11 +15,19 @@ Por eso la ley se invierte: **el núcleo limpio es el core 1 y es de la radio.**
 | Pieza | Modelo | Bus |
 |---|---|---|
 | Placa | Heltec WiFi LoRa 32 **V3** (ESP32-S3, SX1262, CP2102, 8 MB, sin PSRAM) | — |
-| GPS | u-blox NEO-6M (módulo GY-NEO6MV2), NMEA 9600 8N1 | UART1 |
-| Brújula | QMC5883L (dirección I2C `0x0D`) | Wire1 |
+| GPS + brújula | SEQURE M10-25Q: u-blox M10 (115200 8N1, 10 Hz) y QMC5883L (I2C `0x0D`) en un solo módulo | UART1 + Wire1 |
+| Alimentación del módulo | Boost a 5 V desde la batería | — |
+| Nivel lógico | Convertidor bidireccional 3.3 V ↔ 5 V (tipo BSS138, 4 canales: TX, RX, SDA, SCL) | — |
 | Pantalla | SSD1306 128×64 integrada | Wire |
 
 Antena IPEX conectada antes de alimentar. El pinger transmite a 22 dBm por defecto.
+
+El M10-25Q pide 5 V, y el pin 5V de la V3 solo da tensión con USB. Por eso va un boost desde la batería.
+Las fichas no dicen a qué nivel trabajan sus líneas, y el ESP32-S3 no tolera 5 V: las cuatro señales pasan por
+el convertidor. Si se comprueba que el módulo trabaja a 3.3 V, el convertidor sobra pero no hace daño.
+Los convertidores BSS138 ya llevan pull-ups en ambos lados, así que no se añaden otros en Wire1.
+
+Conector SH1.0 de 6 pines (TX, RX, GND, 5V, SCL, SDA). El orden exacto se confirma con el cable del módulo antes de soldar.
 
 ## 2. Pines
 
@@ -30,15 +38,15 @@ Antena IPEX conectada antes de alimentar. El pinger transmite a 22 dBm por defec
 | LED TX | 35 | 1 | lo maneja el driver de radio |
 | OLED SDA / SCL / RST | 17 / 18 / 21 | 0 | Wire |
 | Vext (OLED, activo en bajo) | 36 | 0 | |
-| QMC5883L SDA / SCL | 33 / 34 | 0 | Wire1, mismos pines que `ENV_PIN_SDA/SCL` del repeater |
-| NEO-6M TX → ESP RX | 47 | 0 | `PIN_GPS_RX` |
-| NEO-6M RX ← ESP TX | 48 | 0 | `PIN_GPS_TX`, opcional (solo para configurar el GPS) |
+| QMC5883L SDA / SCL | 33 / 34 | 0 | Wire1 vía convertidor, mismos pines que `ENV_PIN_SDA/SCL` del repeater |
+| M10 TX → ESP RX | 47 | 0 | `PIN_GPS_RX`, vía convertidor |
+| M10 RX ← ESP TX | 48 | 0 | `PIN_GPS_TX`, vía convertidor. **Obligatorio**: hace falta para activar NMEA (§5) |
 | Botón PRG | 0 | 0 | cambiar de pantalla |
 | VBAT ADC / ADC ctrl | 1 / 37 | 0 | |
 
-GPS y brújula a 3.3 V. El NEO-6M no tiene pin de enable: `PIN_GPS_EN` no se usa.
+El M10-25Q no tiene pin de enable: `PIN_GPS_EN` no se usa.
 
-Montaje de la brújula: plana, con el eje X hacia el director y lejos del cable coaxial y de piezas de hierro.
+Montaje del módulo: plano, con la antena cerámica hacia el cielo, la flecha impresa hacia el director, y lejos del cable coaxial y de tornillos de acero.
 No hay acelerómetro, así que **no hay compensación de inclinación**: el boom tiene que estar nivelado al leer el rumbo.
 
 ## 3. Ley de núcleos
@@ -72,7 +80,8 @@ sustituye a Serial y BLE como transporte. `tracecore::Pinger` no cambia y sus te
 |---|---|
 | Repetidores | Lista en NVS (`Preferences`): nombre, lat, lon, altitud opcional y hash (2 hex). Uno de ellos es el objetivo. |
 | Apuntado | Azimut verdadero por gran círculo, distancia y elevación desde la posición GPS al objetivo. |
-| Rumbo | QMC5883L con calibración de hierro duro (offsets por min/max girando 360°) y declinación magnética manual. **Ambos se pueden ajustar** desde la web y se guardan en NVS. |
+| GPS | En cada arranque se envía a UART1 un comando UBX-CFG-VALSET (solo a RAM) que activa NMEA GGA y RMC a 115200. Así funciona aunque el módulo venga solo en UBX, como lo configura INAV, y no depende de la pila de respaldo. NMEA se lee con `MicroNMEA`. |
+| Rumbo | QMC5883L con tres ajustes que se cambian desde la web y se guardan en NVS: **orientación** (intercambio y signo de los ejes X e Y, porque en los GPS de drone los ejes del chip no siguen la flecha impresa), **calibración de hierro duro** (offsets por min/max girando 360°) y **declinación magnética** manual. |
 | En vivo | Un `PING` cada 2 s (igual que la app). Guarda SNR↑, SNR↓, RSSI, RTT y pérdida junto al rumbo y la posición. |
 | CSV | Buffer circular en RAM con las últimas 500 mediciones, descargable en `/log.csv`. Se pierde al reiniciar. |
 | Wi-Fi | SoftAP `Azimuth-XXXX` con clave aleatoria de 8 caracteres generada en el primer arranque y guardada en NVS. Página en `http://192.168.4.1`. |
@@ -142,6 +151,9 @@ Imagen para flasher web: `.pio/build/Heltec_v3_azimuth/firmware-merged.bin` en `
 - [ ] `examples/trace_pinger/` y sus envs no cambian (`git diff main -- examples/trace_pinger` vacío).
 - [ ] Los tests de `tracecore` pasan (`examples/trace_pinger/run_tests.sh`).
 - [ ] El log de arranque muestra la tabla y `VIOLATIONS 0`.
+- [ ] Banco, antes de conectar a la V3: tensión de reposo medida en TX, SDA y SCL del módulo, con el boost a 5 V, y anotada aquí.
+- [ ] Un escáner I2C ve el QMC5883L en `0x0D` a través del convertidor.
+- [ ] Con el comando UBX del arranque llegan tramas `$GNGGA` y `$GNRMC` a 115200.
 - [ ] La OLED muestra el SSID y la clave, y el teléfono entra a `http://192.168.4.1`.
 - [ ] Un repetidor dado de alta desde la web sobrevive a un reinicio.
 - [ ] El rumbo de la OLED coincide con una brújula de referencia en ±5° tras calibrar, con la placa nivelada.
