@@ -105,6 +105,19 @@ TEST_F(TvTelemetry, HandleTvParsesSinceAndEncodes) {
   EXPECT_STREQ("-", reply);
 }
 
+TEST_F(TvTelemetry, OutputNeverContainsTildeOrMarkupChars) {
+  // '~' se lee como tachado en Telegram/WhatsApp (ba42310e): el vector solo
+  // puede llevar base64url, '.' (hueco) y '!' (escape). Día con escapes y huecos.
+  for (uint32_t i = 0; i < tv::SLOTS; i += (i % 5 == 4) ? 2 : 1)
+    tv::put(300000 + i * tv::INTERVAL_MIN, (int16_t)((i % 3) ? 600 : -400), (uint8_t)(i * 5));
+  char out[400];
+  size_t n = tv::encode(300000 + (tv::SLOTS - 1) * tv::INTERVAL_MIN, 0, out, sizeof(out));
+  ASSERT_GT(n, 1u);
+  EXPECT_NE(nullptr, strchr(out, '!'));
+  EXPECT_EQ(nullptr, strchr(out, '~'));
+  EXPECT_EQ(n, strspn(out, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!"));
+}
+
 TEST_F(TvTelemetry, HpaCodeCoversSeaLevelToHighAltitude) {
   EXPECT_EQ(180, tv::hpa_code(905.0f));    // Bucaramanga
   EXPECT_EQ(104, tv::hpa_code(752.0f));    // Bogotá
