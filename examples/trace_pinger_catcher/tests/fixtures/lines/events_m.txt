@@ -1,0 +1,13 @@
+# Línea M (MEAS [n], fw ≥ 0.5.0): n lecturas de RSSI instantáneo con filtro mediana ± 3·MAD. dBm; mean/sd con 2 decimales.
+# El formato lo comprueba test_line_fixtures (formatMeas); lo leen las apps (paridad de parser).
+# Piso real (Faketec 735E58C8, 914.000 MHz, 2026-11-06)
+M,64,64,-99.25,0.71,-99.0,-101.0,-98.0	{"type":"M","n":64,"kept":64,"mean":-99.25,"sd":0.71,"median":-99.0,"min":-101.0,"max":-98.0}
+# Advert de un companion a través de paredes (915.800 MHz)
+M,64,57,-28.23,0.71,-28.0,-30.0,-27.0	{"type":"M","n":64,"kept":57,"mean":-28.23,"sd":0.71,"median":-28.0,"min":-30.0,"max":-27.0}
+# Ventana que solo cubre parte de un paquete: el filtro deja la mayoría (kept < 0,8·n => aviso)
+M,64,36,-96.67,0.53,-96.0,-98.0,-96.0	{"type":"M","n":64,"kept":36,"mean":-96.67,"sd":0.53,"median":-96.0,"min":-98.0,"max":-96.0}
+# MEAS 16 y MEAS 256 (límites), señal constante: sd 0
+M,16,16,-90.50,0.00,-90.5,-90.5,-90.5	{"type":"M","n":16,"kept":16,"mean":-90.5,"sd":0.0,"median":-90.5,"min":-90.5,"max":-90.5}
+M,256,250,-65.03,0.41,-65.0,-65.5,-64.5	{"type":"M","n":256,"kept":250,"mean":-65.03,"sd":0.41,"median":-65.0,"min":-65.5,"max":-64.5}
+# Media con un decimal "redondo" y valores sobre −10 dBm (cerca de la antena)
+M,64,64,-7.10,1.25,-7.0,-9.5,-5.0	{"type":"M","n":64,"kept":64,"mean":-7.1,"sd":1.25,"median":-7.0,"min":-9.5,"max":-5.0}
