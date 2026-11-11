@@ -21,6 +21,20 @@ pio run -e Xiao_nrf52_trace_pinger_catcher -t upload      # o ProMicro_trace_pin
 
 Doble reset rápido si no entra en el bootloader; cable USB de datos.
 
+## Testbed BLE (hardware real)
+
+`tools/ble_testbed.py` valida la placa flasheada por BLE, como lo haría la app y con una sola conexión: escaneo `MeshAz-*` (sin placas legacy), `HELLO` proto 3, `MODE` en ambos sentidos con el gating (`PING` solo en pinger, `MEAS` solo en catcher), reset de radio al cambiar de modo, `MEAS` contra una baliza CW real, `PING` y los comandos eliminados (`PONG`, `RF`, `LAST?`, `MON`, `SAVE` → `!ERR unknown`).
+
+```bash
+pip install bleak
+python3 examples/trace_pinger_catcher/tools/ble_testbed.py --freq 914.000 --min-dbm -70
+```
+
+- Necesita una baliza CW en `--freq` a poca distancia (a 1 m se miden ≈ -53 dBm, sd < 1 dB) y permiso de Bluetooth para la terminal.
+- No necesita otra placa: el `PING` solo comprueba que transmite y acaba en `timeout`. Un ping con respuesta requiere un segundo nodo que conteste al TRACE.
+- Con varias placas, `--name MeshAz-XXXXXXXX`. Sale con código 1 si falla alguna comprobación.
+- Es independiente del estado previo de la placa (hash ya fijado, modo anterior); la comprobación `nohash` solo se hace si la placa arrancó sin hash.
+
 ## Tests (host)
 
 ```bash
