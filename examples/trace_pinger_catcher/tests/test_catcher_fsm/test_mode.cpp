@@ -46,3 +46,10 @@ TEST(Mode, BadArgIsSyntaxError) {
   EXPECT_EQ(r.out.lines.back(), "!ERR syntax");
   EXPECT_EQ(r.p->mode(), Mode::Catcher);
 }
+
+TEST(Mode, SwitchingResetsTheRadioPreset) {
+  Rig r(true, false);
+  EXPECT_EQ(r.p->onCommand("SET freq=910.000", 0).kind, Action::Reconfigure);
+  EXPECT_EQ(r.p->onCommand("MODE pinger", 0).kind, Action::Reconfigure);
+  EXPECT_EQ(r.p->config().radio.freq_khz, RadioConfig().freq_khz);
+}

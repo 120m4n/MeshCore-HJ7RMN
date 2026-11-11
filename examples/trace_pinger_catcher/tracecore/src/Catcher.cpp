@@ -97,8 +97,9 @@ Action Catcher::doMode(std::string_view arg) {
   if ((pinger ? Mode::Pinger : Mode::Catcher) == mode_) { say("#OK mode=%s", pinger ? "pinger" : "catcher"); return {}; }
   if (inFlight()) { say("!ERR state busy"); return {}; }
   mode_ = pinger ? Mode::Pinger : Mode::Catcher;
+  cfg_.radio = RadioConfig();   // cada modo parte del preset por defecto: la app fija la frecuencia que necesite
   say("#OK mode=%s", pinger ? "pinger" : "catcher");
-  return {};
+  return act(Action::Reconfigure);
 }
 
 Action Catcher::doStop() {
