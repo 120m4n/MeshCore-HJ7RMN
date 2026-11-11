@@ -5,7 +5,7 @@ Se conecta como lo hace MeshAzimuth (NUS, una sola conexión) y valida el protoc
 HELLO, MODE, gating por modo, MEAS contra una baliza CW real, PING, comandos eliminados.
 
     pip install bleak
-    python3 tools/ble_testbed.py [--freq 914.000] [--min-dbm -70] [--name MeshAz-735E58C8]
+    python3 tools/ble_testbed.py [--freq 914.000] [--min-dbm -70] [--hash 47] [--name MeshAz-735E58C8]
 
 Requisitos: la placa flasheada (recién arrancada o no), una baliza CW en --freq a poca distancia
 (el MEAS debe superar --min-dbm) y permiso de Bluetooth para la terminal. No hace falta otra
@@ -103,7 +103,7 @@ async def run(a):
         if any("hash= " in l or l.rstrip().endswith("hash=") for l in o):   # sin hash tras arrancar
             o = await cmd(cli, "PING 1")
             check("PING sin hash -> !ERR state nohash", o == ["!ERR state nohash"], o)
-        o = await cmd(cli, "SET hash=AB")
+        o = await cmd(cli, f"SET hash={a.hash}")
         check("SET hash", o and o[0].startswith("#OK"), o)
         o = await cmd(cli, "PING 1", timeout=8.0, until="S,")   # P,… y luego el resumen S,…
         print("   PING 1 ->", o)
@@ -127,6 +127,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--freq", default="914.000", help="MHz de la baliza CW (por defecto 914.000)")
     p.add_argument("--min-dbm", type=float, default=-70, help="mínimo aceptable de la media del MEAS")
+    p.add_argument("--hash", default="AB", help="hash hex (1 byte) para el PING (por defecto AB)")
     p.add_argument("--name", help="nombre BLE exacto si hay varias placas")
     asyncio.run(run(p.parse_args()))
     sys.exit(0 if all(results) else 1)
