@@ -1,17 +1,9 @@
-// Catcher TRACE para XIAO nRF52840 + Wio-SX1262 (spec 001-trace-catcher-firmware).
-// Cascarón Arduino: traduce radio, USB serie y flash a eventos de tracecore::Catcher.
-// No ejecuta el core de mesh: solo transmite tramas TRACE/DIRECT (FR-008).
+// Tarjeta única para XIAO nRF52840 + Wio-SX1262 / Faketec. MODE catcher (mide RSSI, no transmite; arranque) o
+// MODE pinger (TRACE DIRECT, 12/15 bytes). Cascarón Arduino: traduce radio, USB serie y BLE a tracecore::Catcher.
 #include <Arduino.h>
 #ifdef NRF52_PLATFORM
-#include <InternalFileSystem.h>
-using namespace Adafruit_LittleFS_Namespace;
-#define CFG_FS InternalFS
-#define CFG_WRITE FILE_O_WRITE
 #define DEVICE_ID NRF_FICR->DEVICEID[0]
 #else
-#include <SPIFFS.h>
-#define CFG_FS SPIFFS
-#define CFG_WRITE "w"
 #define DEVICE_ID ((uint32_t)(ESP.getEfuseMac() >> 16))   // bytes 2..5 de la MAC: los bajos son el OUI de Espressif
 #endif
 #include <target.h>
@@ -21,6 +13,7 @@ using namespace Adafruit_LittleFS_Namespace;
 #include "BleTransport.h"
 #include "CompositeSink.h"
 #include "tracecore/Airtime.h"
+#include "tracecore/TraceFrame.h"
 #include "tracecore/LineAssembler.h"
 #include "tracecore/LineCodec.h"
 #include "tracecore/Catcher.h"
@@ -31,7 +24,6 @@ extern RADIO_CLASS radio;   // target.cpp; para leer GetPacketStatus (PktStatus,
 
 namespace {
 
-constexpr const char* kCfgPath = "/catcher.cfg";
 constexpr uint32_t kTxTimeoutMs = 3000;  // si la radio no avisa fin de TX
 
 // Semilla del TRNG del SX1262, igual que el resto de MeshCore.
@@ -49,32 +41,6 @@ struct UsbSink : LineSink {
     Serial.write((const uint8_t*)buf, n + 1);
   }
 };
-
-enum class CfgLoad { Loaded, Missing, Corrupt };
-
-CfgLoad cfgLoad(CatcherConfig& out) {
-  if (!CFG_FS.exists(kCfgPath)) return CfgLoad::Missing;
-  File f = CFG_FS.open(kCfgPath);
-  if (!f) return CfgLoad::Corrupt;
-  uint8_t b[kCfgBlobSize];
-  const int n = f.read(b, sizeof b);
-  f.close();
-  const auto c = deserialize(b, n < 0 ? 0 : (size_t)n);
-  if (!c) return CfgLoad::Corrupt;
-  out = *c;
-  return CfgLoad::Loaded;
-}
-
-bool cfgSave(const CatcherConfig& c) {
-  uint8_t b[kCfgBlobSize];
-  serialize(c, b);
-  CFG_FS.remove(kCfgPath);  // FILE_O_WRITE (nRF52) no trunca
-  File f = CFG_FS.open(kCfgPath, CFG_WRITE);
-  if (!f) return false;
-  const size_t w = f.write(b, sizeof b);
-  f.close();
-  return w == sizeof b;
-}
 
 HwRng rng;
 UsbSink usb;
@@ -109,11 +75,8 @@ void applyRadio(const RadioConfig& r) {
 void exec(Action a) {
   switch (a.kind) {
     case Action::Transmit: {
-      // FR-008: solo TRACE/DIRECT (12 o 15 bytes) o una trama LAB (RAW_CUSTOM/DIRECT, 0 saltos, magic 'L')
-      const bool trace = a.bytes[0] == 0x26 && (a.len == kRequestLen || a.len == kRequestMax);
-      const bool lab = a.len > 3 && a.bytes[0] == kLabHeader && a.bytes[1] == 0x00 && a.bytes[2] == kLabMagic;
-      if (!trace && !lab) return;
-      if (catcher->rfOff()) return;   // RF off: nunca se transmite (cambio de antena en curso)
+      // Solo TRACE/DIRECT (12 o 15 bytes): nada más sale por la antena.
+      if (!(a.bytes[0] == 0x26 && (a.len == kRequestLen || a.len == kRequestMax))) return;
       const uint32_t now = millis();
       if (radio_driver.isReceiving()) {  // LBT: preámbulo en curso o CAD
         exec(catcher->onChannelBusy(now));
@@ -134,31 +97,14 @@ void exec(Action a) {
     case Action::Reconfigure:
       applyRadio(catcher->config().radio);
       return;
-    case Action::RadioOff:
-      // SX1262 en standby: ni transmite ni escucha. Con rfOff() el loop no re-arma RX y exec() no transmite:
-      // la radio queda callada hasta RF on (StartRx), y el loop vuelve a RX con la misma configuración.
-      radioIdle();
-      return;
-    case Action::Save:
-      catcher->onSaveDone(cfgSave(catcher->config()));
-      return;
     default:  // StartRx / Standby: la radio siempre escucha; recvRaw() re-arma RX tras cada TX
       return;
   }
 }
 
-// MEAS [n] [wait=s]: n lecturas de RSSI instantáneo (GetRssiInst, 0,5 dB) en la frecuencia actual, con filtro robusto
-// (spec 001-aba-ping-ponger, FR-011/FR-013/FR-016). Mide la baliza CW (env *_cw_beacon). No transmite.
-// -> M,<n>,<kept>,<mean>,<sd>,<median>,<min>,<max>   (formatMeas, fixture events_m.txt)
-// Con wait=s responde `#OK meas n=<n> wait=<s>` y mide a los s segundos aunque se caiga el BLE (el usuario se aleja);
-// la app recoge la última M con `MEAS?` (`!ERR state busy` si aún no midió, `!ERR state nolast` si no hay).
-// ponytail: la espera la lleva el cascarón, no la FSM; mientras tanto la app no debe mandar PING/GO/MON.
+// MEAS [n]: n lecturas de RSSI instantáneo (GetRssiInst, 0,5 dB) en la frecuencia actual, con filtro robusto de ráfagas
+// ajenas (rssiStats). Mide la baliza CW. No transmite. -> M,<n>,<kept>,<mean>,<sd>,<median>,<min>,<max>
 constexpr uint32_t kMeasGapUs = 2000;   // ~1 lectura nueva por paso; 64 lecturas ≈ 130 ms
-constexpr uint32_t kMeasMaxWaitS = 120;
-uint16_t meas_pending = 0;   // n de un MEAS con espera (0 = ninguno)
-uint32_t meas_due = 0;
-char last_m[kMaxLine];
-size_t last_m_len = 0;
 
 void measNow(size_t n) {
   uint8_t pkt[256];
@@ -170,58 +116,22 @@ void measNow(size_t n) {
     delayMicroseconds(kMeasGapUs);
   }
   RssiStats r;
-  rssiStats(v, n, r);
-  last_m_len = formatMeas(last_m, sizeof last_m, r);
-  sink.line(last_m, last_m_len);
+  char b[kMaxLine];
+  if (rssiStats(v, n, r)) sink.line(b, formatMeas(b, sizeof b, r));
 }
-
-bool measBusy() { return tx_wait || !catcher->idle() || meas_pending; }
 
 void meas(std::string_view arg) {
+  size_t n = kMeasDefault;
+  if (!arg.empty()) {
+    n = 0;
+    for (char c : arg) n = (c >= '0' && c <= '9' && n <= 100000) ? n * 10 + (c - '0') : 1000000;
+  }
   char b[kMaxLine];
-  size_t n = kMeasDefault, wait_s = 0;
-  bool ok = true;
-  while (!arg.empty()) {   // "64", "wait=20", "64 wait=20"
-    const size_t sp = arg.find(' ');
-    std::string_view t = arg.substr(0, sp);
-    arg = sp == std::string_view::npos ? std::string_view() : arg.substr(sp + 1);
-    if (t.empty()) continue;
-    size_t* dst = &n;
-    if (t.substr(0, 5) == "wait=") { dst = &wait_s; t = t.substr(5); }
-    *dst = t.empty() ? kMeasMax + 1 : 0;
-    for (char c : t) *dst = (c >= '0' && c <= '9' && *dst <= 100000) ? *dst * 10 + (c - '0') : 1000000;
-    ok = ok && *dst < 1000000;
-  }
-  if (!ok) { sink.line("!ERR syntax", 11); return; }
   if (n < kMeasMin || n > kMeasMax) {
-    sink.line(b, (size_t)snprintf(b, sizeof b, "!ERR range meas %u-%u", (unsigned)kMeasMin, (unsigned)kMeasMax));
+    sink.line(b, (size_t)snprintf(b, sizeof b, n >= 1000000 ? "!ERR syntax" : "!ERR range meas %u-%u", (unsigned)kMeasMin, (unsigned)kMeasMax));
     return;
   }
-  if (wait_s > kMeasMaxWaitS) {
-    sink.line(b, (size_t)snprintf(b, sizeof b, "!ERR range wait 0-%u", (unsigned)kMeasMaxWaitS));
-    return;
-  }
-  if (catcher->rfOff()) { sink.line("!ERR rfoff", 10); return; }
-  if (measBusy()) { sink.line("!ERR state busy", 15); return; }
-  if (wait_s == 0) { measNow(n); return; }
-  meas_pending = (uint16_t)n;
-  meas_due = millis() + wait_s * 1000;
-  last_m_len = 0;
-  sink.line(b, (size_t)snprintf(b, sizeof b, "#OK meas n=%u wait=%u", (unsigned)n, (unsigned)wait_s));
-}
-
-void measQuery() {
-  if (meas_pending) sink.line("!ERR state busy", 15);
-  else if (last_m_len) sink.line(last_m, last_m_len);
-  else sink.line("!ERR state nolast", 17);
-}
-
-// Un MEAS con espera que ya toca. Si el catcher quedó ocupado, se informa y no se mide.
-void measTick() {
-  if (!meas_pending || (int32_t)(millis() - meas_due) < 0) return;
-  const size_t n = meas_pending;
-  meas_pending = 0;
-  if (catcher->rfOff() || tx_wait || !catcher->idle()) { sink.line("!ERR state busy", 15); return; }
+  if (tx_wait || !catcher->idle()) { sink.line("!ERR state busy", 15); return; }
   measNow(n);
 }
 
@@ -247,23 +157,13 @@ void idTick() {
   led((millis() / kIdBlinkMs) & 1);
 }
 
-// RADIO?: contadores de la radio del catcher (diagnóstico de ecos perdidos: ¿llegó dañado o no llegó?).
-// Lo resuelve el cascarón porque son datos del driver, no de la FSM.
 void command(std::string_view l, Origin o) {
-  if (l == "RADIO?") {
-    char b[96];
-    const int n = snprintf(b, sizeof b, "#RADIO recv=%lu recv_err=%lu sent=%lu rssi_pkt=-%u.%u sig_rssi_pkt=-%u.%u",
-                           (unsigned long)radio_driver.getPacketsRecv(), (unsigned long)radio_driver.getPacketsRecvErrors(),
-                           (unsigned long)radio_driver.getPacketsSent(), last_rssi_pkt / 2, (last_rssi_pkt & 1) * 5,
-                           last_sig_rssi_pkt / 2, (last_sig_rssi_pkt & 1) * 5);
-    sink.line(b, (size_t)n);
+  if (l == "ID" || l.substr(0, 3) == "ID ") { identify(l.size() > 3 ? l.substr(3) : std::string_view()); return; }
+  if (l == "MEAS" || l.substr(0, 5) == "MEAS ") {
+    if (catcher->mode() != Mode::Catcher) sink.line("!ERR mode", 9);   // el pinger no mide
+    else meas(l.size() > 5 ? l.substr(5) : std::string_view());
     return;
   }
-  const bool meas_cmd = l == "MEAS?" || l == "MEAS" || l.substr(0, 5) == "MEAS ";
-  if (meas_cmd && catcher->mode() != Mode::Catcher) { sink.line("!ERR mode", 9); return; }   // el pinger no mide
-  if (l == "MEAS?") { measQuery(); return; }
-  if (l == "ID" || l.substr(0, 3) == "ID ") { identify(l.size() > 3 ? l.substr(3) : std::string_view()); return; }
-  if (l == "MEAS" || l.substr(0, 5) == "MEAS ") { meas(l.size() > 5 ? l.substr(5) : std::string_view()); return; }
   exec(catcher->onCommand(l, millis(), o));
 }
 
@@ -282,7 +182,7 @@ void pollSerial() {
 void pollBle() {
   ble.poll([](std::string_view l) { command(l, Origin::Ble); },
            []() { sink.line("!ERR syntax", 11); });
-  if (ble.takeDisconnected()) exec(catcher->onTransportLost(Origin::Ble));   // FR-005: detiene GO/ráfagas de BLE
+  if (ble.takeDisconnected()) exec(catcher->onTransportLost(Origin::Ble));   // detiene GO/ráfagas de BLE
 }
 
 }  // namespace
@@ -301,23 +201,15 @@ void setup() {
   }
   radio_driver.begin();
   randomSeed(radio_driver.getRngSeed());
-#ifdef NRF52_PLATFORM
-  InternalFS.begin();
-#else
-  SPIFFS.begin(true);   // formatea si la partición no está montable
-#endif
   char ble_name[24];
-  snprintf(ble_name, sizeof ble_name, "PingPong-%08lX", (unsigned long)DEVICE_ID);   // §15; los 6 hex finales = id del #HELLO
+  snprintf(ble_name, sizeof ble_name, "MeshAz-%08lX", (unsigned long)DEVICE_ID);   // los 6 hex finales = id del #HELLO
   ble.begin(ble_name);
 
-  CatcherConfig cfg;  // valores por defecto: preset Australia, txp 22, sin hash
-  const CfgLoad loaded = cfgLoad(cfg);
-  if (loaded == CfgLoad::Corrupt) cfg = CatcherConfig();
+  const CatcherConfig cfg;   // preset Australia, txp 22, sin hash (la app fija hash/freq al conectar); siempre arranca en catcher
   applyRadio(cfg.radio);
-  radio_driver.resetStats();   // n_recv_errors no se inicializa en el constructor del driver
 
   catcher = new Catcher(cfg, rng, sink, DEVICE_ID);
-  catcher->emitBoot(loaded == CfgLoad::Corrupt);
+  catcher->emitBoot(false);
   board.onBootComplete();
 }
 
@@ -336,7 +228,7 @@ void loop() {
       tx_wait = false;
       exec(catcher->onTxDone(millis(), false));
     }
-  } else if (!catcher->rfOff()) {   // RF off: no re-armar RX (recvRaw despertaría la radio)
+  } else {
     uint8_t buf[256];
     const int n = radio_driver.recvRaw(buf, sizeof buf);
     if (n > 0) {
@@ -348,5 +240,4 @@ void loop() {
   }
 
   exec(catcher->tick(millis()));
-  measTick();
 }

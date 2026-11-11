@@ -6,7 +6,6 @@
 #include "tracecore/Airtime.h"
 #include "tracecore/Config.h"
 #include "tracecore/DutyLimiter.h"
-#include "tracecore/LabFrame.h"
 #include "tracecore/Stats.h"
 #include "tracecore/Types.h"
 #include "tracecore/Version.h"
@@ -14,7 +13,7 @@
 namespace tracecore {
 
 
-// catcher: solo mide (MEAS), nunca transmite. pinger: TRACE/PING/GO/MON/PONG/RF. Siempre arranca en catcher.
+// catcher: solo mide (MEAS), nunca transmite. pinger: solo TRACE DIRECT (PING/GO). Siempre arranca en catcher.
 enum class Mode : uint8_t { Catcher, Pinger };
 
 // Por dónde entró un comando; solo sirve para detener lo que inició un transporte que se pierde.
@@ -38,9 +37,7 @@ struct Action {
     Transmit,     // CAD y, si el canal está libre, TX de bytes/len. Si está ocupado: onChannelBusy()
     StartRx,      // RX continuo; el cascarón lo mantiene tras cada paquete hasta Transmit/Standby
     Standby,      // radio en reposo
-    Reconfigure,  // aplicar config().radio y, si estaba escuchando, volver a RX
-    Save,         // persistir config(); responder con onSaveDone()
-    RadioOff      // RF off: radio en reposo, sin transmitir ni escuchar hasta StartRx (RF on)
+    Reconfigure   // aplicar config().radio y, si estaba escuchando, volver a RX
   };
   Kind kind = None;
   const uint8_t* bytes = nullptr;  // válido hasta la siguiente llamada al Catcher
@@ -59,12 +56,9 @@ class Catcher {
   Action onChannelBusy(uint32_t now);
   Action onRx(const uint8_t* b, size_t n, float rssi, float snr, uint32_t now);
   Action tick(uint32_t now);
-  void onSaveDone(bool ok);
 
   const CatcherConfig& config() const { return cfg_; }
-  // RF off activo: el cascarón no debe transmitir ni re-armar RX (doble candado, además del de onCommand).
-  bool rfOff() const { return rf_off_; }
-  // Sin ráfaga, GO, MON ni PONG en curso: el cascarón puede leer la radio (MEAS) sin pisar nada.
+  // Sin ráfaga ni GO en curso: el cascarón puede leer la radio (MEAS) sin pisar nada.
   Mode mode() const { return mode_; }
   bool idle() const { return state_ == State::Idle; }
 
@@ -81,20 +75,14 @@ class Catcher {
   Action act(Action::Kind k) const { Action a; a.kind = k; return a; }
 
   Action doSet(const char* key, const char* val);
-  Action doMon(bool on);
-  Action doRf(bool on);
   Action doStop();
   Action doMode(std::string_view arg);
   Action stopRun();
-  Action startRun(uint16_t count, bool summary, bool go, uint32_t now, uint16_t wait_s = 0);
-  void doLast();
+  Action startRun(uint16_t count, bool summary, bool go, uint32_t now);
   Action tryBegin(uint32_t now);
   Action finishWith(Status st, uint32_t now);
   bool busyTooLong(uint32_t now);   // canal ocupado más que el paquete más largo posible
   Action endRun();
-  Action doPong(std::string_view arg, uint32_t now);
-  Action labDone(const char* status);   // G,<seq>,<status> y vuelta a Idle
-  void emitLab(const LabResponse& r);
   uint32_t genTag();
   bool inFlight() const { return state_ == State::WaitSend || state_ == State::TxPending || state_ == State::RxWait; }
 
@@ -109,18 +97,10 @@ class Catcher {
   // ráfaga / modo continuo
   uint16_t run_total_ = 0, run_done_ = 0, run_ok_ = 0, run_to_ = 0, run_busy_ = 0;
   uint8_t run_miss_ = 0;   // timeouts seguidos en la ráfaga: 3 => sin eco, se corta (kNoEchoStop)
-  bool rf_off_ = false;   // no se persiste: al arrancar la radio siempre está activa
   bool run_go_ = false, run_summary_ = false, stop_req_ = false;
   Origin cur_origin_ = Origin::Serial, run_origin_ = Origin::Serial;
   int32_t up_c_[kMaxBurst], dn_c_[kMaxBurst], rssi_d_[kMaxBurst];
   uint16_t samples_ = 0;
-  bool run_detached_ = false;   // PING n wait=s: no se detiene si se cae el BLE (el usuario se aleja)
-  // Última ráfaga PING n, para LAST? tras reconectar: las P y la S.
-  PingResult last_[kMaxBurst];
-  uint16_t last_n_ = 0;
-  BurstSummary last_sum_;
-  bool has_last_ = false, last_done_ = false;
-
   // ping en curso
   Pending pend_;
   uint32_t seq_ = 0, last_tag_ = 0;
@@ -131,14 +111,6 @@ class Catcher {
   uint32_t next_ms_ = 0, ping_start_ = 0, tx_start_ = 0, tx_dur_ = 0, t_tx_done_ = 0, deadline_ = 0;
   uint8_t tx_buf_[kRequestMax];
 
-  // comando LAB pendiente (PONG …, CLAUDE.md §12)
-  char labkey_[16] = "password";
-  uint8_t lab_seq_ = 0;
-  LabCommand lab_cmd_;
-  uint8_t lab_buf_[2 + kLabMaxLen];
-  uint8_t lab_len_ = 0;
-  bool lab_retry_ = false;      // LAB: canal ocupado, reintento pendiente en lab_retry_at_
-  uint32_t lab_retry_at_ = 0;
   uint8_t echoes_ = 0;
   int8_t first_snr_up_q_ = 0;
   int32_t first_snr_dn_c_ = 0, first_rssi_d_ = 0;

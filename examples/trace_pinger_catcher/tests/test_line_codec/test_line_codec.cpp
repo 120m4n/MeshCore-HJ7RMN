@@ -60,7 +60,10 @@ TEST(LineCodec, FormatRawAndTruncation) {
 TEST(LineCodec, ParseCommands) {
   EXPECT_TRUE(parseCommand("hello\r").kind == K::Hello);
   EXPECT_TRUE(parseCommand("CFG?").kind == K::CfgQuery);
-  EXPECT_TRUE(parseCommand("  save ").kind == K::Save);
+  EXPECT_TRUE(parseCommand("  save ").kind == K::Unknown);   // SAVE, MON, RF, PONG y LAST? ya no existen
+  EXPECT_TRUE(parseCommand("MON on").kind == K::Unknown);
+  EXPECT_TRUE(parseCommand("mode pinger").kind == K::Mode);
+  EXPECT_TRUE(parseCommand("PING 5 wait=3").kind == K::Syntax);
   EXPECT_TRUE(parseCommand("GO").kind == K::Go);
   EXPECT_TRUE(parseCommand("stop").kind == K::Stop);
   EXPECT_TRUE(parseCommand("").kind == K::Empty);
@@ -73,11 +76,6 @@ TEST(LineCodec, ParseCommands) {
   EXPECT_TRUE(p.has_n);
   EXPECT_EQ(p.n, 5);
   EXPECT_TRUE(parseCommand("PING x").kind == K::Syntax);
-
-  Command m = parseCommand("MON on");
-  EXPECT_TRUE(m.kind == K::Mon && m.on);
-  EXPECT_TRUE(parseCommand("mon OFF").kind == K::Mon);
-  EXPECT_TRUE(parseCommand("MON maybe").kind == K::Syntax);
 
   Command s = parseCommand("SET Hash=A1");
   EXPECT_TRUE(s.kind == K::Set);

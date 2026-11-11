@@ -124,51 +124,25 @@ Command parseCommand(std::string_view line) {
 
   if (ieq(word, "HELLO")) { c.kind = Command::Kind::Hello; return c; }
   if (ieq(word, "CFG?")) { c.kind = Command::Kind::CfgQuery; return c; }
-  if (ieq(word, "SAVE")) { c.kind = Command::Kind::Save; return c; }
   if (ieq(word, "GO")) { c.kind = Command::Kind::Go; return c; }
   if (ieq(word, "STOP")) { c.kind = Command::Kind::Stop; return c; }
-  if (ieq(word, "LAST?")) { c.kind = Command::Kind::Last; return c; }
   if (ieq(word, "PING")) {
     c.kind = Command::Kind::Ping;
     if (rest.empty()) return c;
-    const size_t sp2 = rest.find(' ');
-    const std::string_view num = rest.substr(0, sp2);
-    std::string_view opt = sp2 == std::string_view::npos ? std::string_view() : trim(rest.substr(sp2 + 1));
     auto digits = [](std::string_view t, uint32_t& v) {
       v = 0;
       if (t.empty()) return false;
       for (char ch : t) if (ch < '0' || ch > '9' || (v = v * 10 + (ch - '0')) > 9999) return false;
       return true;
     };
-    uint32_t n = 0, w = 0;
-    if (!digits(num, n)) { c.kind = Command::Kind::Syntax; return c; }
-    if (!opt.empty()) {
-      if (opt.size() < 6 || !ieq(opt.substr(0, 5), "wait=") || !digits(opt.substr(5), w)) { c.kind = Command::Kind::Syntax; return c; }
-      c.wait_s = (uint16_t)w;
-    }
+    uint32_t n = 0;
+    if (!digits(rest, n)) { c.kind = Command::Kind::Syntax; return c; }
     c.n = (uint16_t)n;
     c.has_n = true;
     return c;
   }
-  if (ieq(word, "MON")) {
-    if (ieq(rest, "on")) { c.kind = Command::Kind::Mon; c.on = true; return c; }
-    if (ieq(rest, "off")) { c.kind = Command::Kind::Mon; c.on = false; return c; }
-    c.kind = Command::Kind::Syntax;
-    return c;
-  }
-  if (ieq(word, "RF")) {   // RF off: radio dormida y sin TX (cambio de antena seguro); RF on: vuelve
-    if (ieq(rest, "on")) { c.kind = Command::Kind::Rf; c.on = true; return c; }
-    if (ieq(rest, "off")) { c.kind = Command::Kind::Rf; c.on = false; return c; }
-    c.kind = Command::Kind::Syntax;
-    return c;
-  }
   if (ieq(word, "MODE")) {
     c.kind = rest.empty() ? Command::Kind::Syntax : Command::Kind::Mode;
-    c.arg = rest;
-    return c;
-  }
-  if (ieq(word, "PONG")) {
-    c.kind = rest.empty() ? Command::Kind::Syntax : Command::Kind::Pong;
     c.arg = rest;
     return c;
   }

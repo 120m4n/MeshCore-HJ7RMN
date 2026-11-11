@@ -132,7 +132,8 @@ TEST(LineFixtures, CommandsProduceTheExpectedReplies) {
   for (const auto& e : v) {
     const std::string setup = e.json.str("setup");
     Rig r(setup != "nohash");  // por defecto hay hash A1
-    if (setup == "mon") r.p->onCommand("MON on", 0);
+    
+    if (setup == "catcher") r.p->onCommand("MODE catcher", 0);
     if (setup == "pending") r.p->onCommand("PING", 0);
     r.out.lines.clear();
     r.p->onCommand(e.payload, 10);
@@ -154,7 +155,7 @@ TEST(LineFixtures, EveryErrorCodeTheFirmwareEmitsIsCovered) {
   if (!load("commands.txt", v)) GTEST_SKIP() << "ejecutar con run_tests.sh (CATCHER_DIR)";
   std::string all;
   for (const auto& e : v) all += e.json.str("reply") + "\n";
-  for (const char* want : {"!ERR syntax", "!ERR unknown", "!ERR range", "!ERR state nohash", "!ERR state mon", "!ERR state busy"})
+  for (const char* want : {"!ERR syntax", "!ERR unknown", "!ERR range", "!ERR state nohash", "!ERR mode", "!ERR state busy"})
     EXPECT_NE(all.find(want), std::string::npos);
 }
 

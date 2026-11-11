@@ -8,7 +8,7 @@ using namespace fakes;
 TEST(Mode, StartsAsCatcherAndNeverTransmits) {
   Rig r(true, false);
   EXPECT_EQ(r.p->mode(), Mode::Catcher);
-  for (const char* c : {"PING", "PING 5", "GO", "MON on", "PONG GET", "RF off", "LAST?", "SAVE"}) {
+  for (const char* c : {"PING", "PING 5", "GO"}) {
     EXPECT_EQ(r.p->onCommand(c, 0).kind, Action::None);
     EXPECT_EQ(r.out.lines.back(), "!ERR mode");
   }

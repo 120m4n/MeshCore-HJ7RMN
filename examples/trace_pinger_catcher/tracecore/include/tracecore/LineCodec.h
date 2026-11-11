@@ -22,15 +22,13 @@ size_t formatRaw(char* out, size_t cap, uint32_t t_ms, int32_t rssi_d, int32_t s
 size_t formatMeas(char* out, size_t cap, const RssiStats& r);
 
 struct Command {
-  enum class Kind : uint8_t { Empty, Hello, CfgQuery, Set, Save, Ping, Go, Stop, Mon, Pong, Rf, Last, Mode, Unknown, Syntax };
+  enum class Kind : uint8_t { Empty, Hello, CfgQuery, Set, Ping, Go, Stop, Mode, Unknown, Syntax };
   Kind kind = Kind::Empty;
   uint16_t n = 1;      // Ping: repeticiones
   bool has_n = false;  // Ping: se escribió `PING <n>`
-  uint16_t wait_s = 0; // Ping: `PING <n> wait=<s>` arranca a los s segundos y sigue aunque se caiga el BLE
-  bool on = false;     // Mon, Rf
   char key[16] = {0};  // Set
   char val[24] = {0};  // Set
-  std::string_view arg;  // Pong: resto de la línea ("GET", "TX=2", "RADIO freq=… bw=… sf=… cr=…")
+  std::string_view arg;  // Mode: "catcher" | "pinger"
 };
 
 // Parsea una línea (sin '\n'; se toleran '\r' y espacios). No valida rangos.

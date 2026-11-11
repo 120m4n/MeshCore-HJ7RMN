@@ -8,7 +8,7 @@ using namespace fakes;
 TEST(ConfigCmds, HelloAndCfg) {
   Rig r;
   r.p->onCommand("HELLO", 0);
-  EXPECT_EQ(r.out.lines.back(), "#HELLO fw=0.7.0 proto=3 role=pinger radio=SX1262 id=C3F01A");
+  EXPECT_EQ(r.out.lines.back(), "#HELLO fw=0.8.0 proto=3 role=pinger radio=SX1262 id=C3F01A");
   r.p->onCommand("CFG?", 0);
   EXPECT_EQ(r.out.lines.back(), "#CFG freq=915.800 bw=250 sf=10 cr=5 txp=22 hash=A1 rate=1500 timeout=auto raw=0");
 }
@@ -65,13 +65,4 @@ TEST(ConfigCmds, HashCanBeSetAtAnyTimeAndWarnsWhenSuspicious) {
   r.p->onCommand("SET hash=A1", 0);
   EXPECT_EQ(r.out.lines.back(), "#OK hash=A1");
   EXPECT_EQ(*r.p->config().hash, 0xA1);
-}
-
-TEST(ConfigCmds, SaveAsksShellToPersist) {
-  Rig r;
-  EXPECT_EQ(r.p->onCommand("SAVE", 0).kind, Action::Save);
-  r.p->onSaveDone(true);
-  EXPECT_EQ(r.out.lines.back(), "#OK saved");
-  r.p->onSaveDone(false);
-  EXPECT_EQ(r.out.lines.back(), "!ERR state flash");
 }

@@ -1,6 +1,6 @@
 # Líneas informativas (#HELLO, #CFG, #OK, #WARN, !ERR) para el parser del host (iOS, fase 003).
 # El lado C++ las produce a través de commands.txt; aquí solo se comprueba que están bien formadas.
-#HELLO fw=0.7.0 proto=3 role=catcher radio=SX1262 id=C3F01A	{"type":"HELLO","fw":"0.7.0","proto":3,"role":"catcher","radio":"SX1262","id":"C3F01A"}
+#HELLO fw=0.8.0 proto=3 role=catcher radio=SX1262 id=C3F01A	{"type":"HELLO","fw":"0.8.0","proto":3,"role":"catcher","radio":"SX1262","id":"C3F01A"}
 #CFG freq=915.800 bw=250 sf=10 cr=5 txp=22 hash= rate=1500 timeout=auto raw=0	{"type":"CFG","freq":"915.800","bw":"250","sf":10,"cr":5,"txp":22,"hash":"","rate":1500,"timeout":"auto","raw":0}
 #CFG freq=910.525 bw=62.5 sf=7 cr=8 txp=-9 hash=A1 rate=2000 timeout=900 raw=1	{"type":"CFG","freq":"910.525","bw":"62.5","sf":7,"cr":8,"txp":-9,"hash":"A1","rate":2000,"timeout":"900","raw":1}
 #OK hash=A1	{"type":"OK","key":"hash","value":"A1"}
