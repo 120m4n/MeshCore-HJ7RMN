@@ -4,12 +4,6 @@
 
 namespace tracecore {
 
-constexpr size_t kMaxBurst = 50;
-
-// Mediana de n ≤ 50 enteros. En n par, promedio de los dos centrales redondeado
-// al más lejano de cero. Devuelve false si n == 0 o n > kMaxBurst.
-bool median(const int32_t* v, size_t n, int32_t& out);
-
 // MEAS (spec 001-aba-ping-ponger, FR-011/FR-013): lecturas de RSSI instantáneo en medios dB (−130 = −65,0 dBm).
 constexpr size_t kMeasMin = 16, kMeasMax = 256, kMeasDefault = 64;
 struct RssiStats {
