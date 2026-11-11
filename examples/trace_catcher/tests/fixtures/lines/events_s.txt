@@ -1,0 +1,9 @@
+# Líneas S (resumen de ráfaga, con el campo final busy). `timeouts` lo usa el formateador C++ (la línea solo lleva loss_pct).
+# loss_pct = round(100*timeouts/(ok+timeouts)); busy/txerr no cuentan. Sin loss_pct ni medianas = campos vacíos.
+S,5,5,0,-6.25,-4.50,-108.0,0	{"type":"S","n":5,"ok":5,"timeouts":0,"busy":0,"loss_pct":0,"med_snr_up":-6.25,"med_snr_dn":-4.5,"med_rssi_dn":-108.0}
+S,5,0,100,,,,0	{"type":"S","n":5,"ok":0,"timeouts":5,"busy":0,"loss_pct":100}
+S,5,3,25,+1.00,+2.00,-90.0,1	{"type":"S","n":5,"ok":3,"timeouts":1,"busy":1,"loss_pct":25,"med_snr_up":1.0,"med_snr_dn":2.0,"med_rssi_dn":-90.0}
+S,2,0,,,,,2	{"type":"S","n":2,"ok":0,"timeouts":0,"busy":2}
+S,1,1,0,+9.25,+8.75,-35.0,0	{"type":"S","n":1,"ok":1,"timeouts":0,"busy":0,"loss_pct":0,"med_snr_up":9.25,"med_snr_dn":8.75,"med_rssi_dn":-35.0}
+S,3,1,67,+9.00,+8.00,-35.0,0	{"type":"S","n":3,"ok":1,"timeouts":2,"busy":0,"loss_pct":67,"med_snr_up":9.0,"med_snr_dn":8.0,"med_rssi_dn":-35.0}
+S,50,40,20,+9.50,+8.50,-35.5,0	{"type":"S","n":50,"ok":40,"timeouts":10,"busy":0,"loss_pct":20,"med_snr_up":9.5,"med_snr_dn":8.5,"med_rssi_dn":-35.5}
